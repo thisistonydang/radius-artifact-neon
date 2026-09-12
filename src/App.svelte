@@ -356,10 +356,8 @@
           </p>
         {/if}
       </div>
-      {#if user}
-        <div class="save-status">
-          {#if saving}<span>Saving…</span>{:else if !cloudDirty}<span>Saved online</span>{/if}
-        </div>
+      {#if user && saving}
+        <div class="save-status"><span>Saving…</span></div>
       {/if}
     </div>
 
