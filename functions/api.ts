@@ -27,6 +27,7 @@ const uuid = z.string().uuid()
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 3
 const MAX_USER_STORAGE_BYTES = 50 * 1024 * 1024
+const MAX_GLOBAL_STORAGE_BYTES = positiveInteger(process.env.MAX_GLOBAL_STORAGE_BYTES, 1024 * 1024 * 1024)
 const BUCKET = 'attachments'
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -34,6 +35,8 @@ const RATE_LIMIT_SALT = process.env.RATE_LIMIT_SALT ?? 'local-development-rate-l
 const CHAT_IP_LIMIT = positiveInteger(process.env.PUBLIC_CHAT_IP_LIMIT, 20)
 const CHAT_GLOBAL_LIMIT = positiveInteger(process.env.PUBLIC_CHAT_GLOBAL_LIMIT, 500)
 const UPLOAD_HOURLY_LIMIT = positiveInteger(process.env.UPLOAD_HOURLY_LIMIT, 20)
+const UPLOAD_IP_HOURLY_LIMIT = positiveInteger(process.env.UPLOAD_IP_HOURLY_LIMIT, 30)
+const UPLOAD_GLOBAL_DAILY_LIMIT = positiveInteger(process.env.UPLOAD_GLOBAL_DAILY_LIMIT, 200)
 const ALLOWED_FILE_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -196,19 +199,31 @@ async function drainStorageDeletions(limit = 20) {
 
 app.get('/api/starter-todos', async (c) => {
   const rows = await db
-    .select({ todo: starterTodos, attachment: starterAttachments })
+    .select({
+      id: starterTodos.id,
+      slug: starterTodos.slug,
+      title: starterTodos.title,
+      completed: starterTodos.completed,
+      position: starterTodos.position,
+      attachmentId: starterAttachments.id,
+      attachmentFileName: starterAttachments.fileName,
+    })
     .from(starterTodos)
     .leftJoin(starterAttachments, eq(starterTodos.id, starterAttachments.starterTodoId))
     .orderBy(asc(starterTodos.position))
+    .limit(MAX_TODOS)
 
   c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
-  const data = rows.map(({ todo, attachment }) => ({
+  const data = rows.map((todo) => ({
     id: todo.id,
     slug: todo.slug,
     title: todo.title,
     completed: todo.completed,
     position: todo.position,
-    attachment: attachment ? { id: attachment.id, fileName: attachment.fileName } : null,
+    attachment:
+      todo.attachmentId && todo.attachmentFileName
+        ? { id: todo.attachmentId, fileName: todo.attachmentFileName }
+        : null,
   }))
   return c.json({ todos: data })
 })
@@ -222,6 +237,7 @@ app.get('/api/starter-attachments/:id/url', async (c) => {
     .where(eq(starterAttachments.id, attachmentId.data))
     .limit(1)
   if (!attachment) return c.json({ error: 'Attachment not found.' }, 404)
+  c.header('Cache-Control', 'public, max-age=300')
   return c.json({ url: await signedDownloadUrl(attachment.storageKey), expiresIn: 3600 })
 })
 
@@ -272,13 +288,31 @@ const cloudTodoInput = z.object({
   title: z.string().trim().min(1).max(200),
   completed: z.boolean(),
 })
-const workspaceInput = z.object({
-  revision: z.number().int().nonnegative(),
-  todos: z.array(cloudTodoInput).max(MAX_TODOS),
-})
+const workspaceInput = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    todos: z.array(cloudTodoInput).max(MAX_TODOS),
+  })
+  .superRefine((workspace, context) => {
+    if (new Set(workspace.todos.map((todo) => todo.clientId)).size !== workspace.todos.length) {
+      context.addIssue({ code: 'custom', message: 'Todo IDs must be unique.', path: ['todos'] })
+    }
+  })
 
 async function listCloudTodos(userId: string) {
-  const todoRows = await db.select().from(todos).where(eq(todos.userId, userId)).orderBy(asc(todos.position))
+  const todoRows = await db
+    .select({
+      id: todos.id,
+      clientId: todos.clientId,
+      title: todos.title,
+      completed: todos.completed,
+      position: todos.position,
+      updatedAt: todos.updatedAt,
+    })
+    .from(todos)
+    .where(eq(todos.userId, userId))
+    .orderBy(asc(todos.position))
+    .limit(MAX_TODOS)
   if (todoRows.length === 0) return []
   const attachmentRows = await db
     .select({
@@ -292,6 +326,7 @@ async function listCloudTodos(userId: string) {
     .from(attachments)
     .where(and(eq(attachments.userId, userId), inArray(attachments.todoId, todoRows.map((todo) => todo.id))))
     .orderBy(asc(attachments.createdAt))
+    .limit(MAX_TODOS * MAX_ATTACHMENTS)
 
   return todoRows.map((todo) => ({
     id: todo.id,
@@ -348,7 +383,10 @@ app.put('/api/me/todos', async (c) => {
         .limit(1)
       if (workspace.revision !== parsed.data.revision) throw new WorkspaceConflict(workspace.revision)
 
-      const existingTodos = await tx.select().from(todos).where(eq(todos.userId, userId))
+      const existingTodos = await tx
+        .select({ id: todos.id, clientId: todos.clientId })
+        .from(todos)
+        .where(eq(todos.userId, userId))
       const removed = existingTodos.filter((todo) => !clientIds.includes(todo.clientId))
       const removedFiles = removed.length
         ? await tx
@@ -430,10 +468,17 @@ app.post('/api/me/todos/:id/attachments', async (c) => {
     return c.json({ error: 'Use a PNG, JPEG, PDF, Markdown, or text file up to 5 MB.' }, 400)
   }
 
-  const uploadLimit = await consumeRateLimit('upload-user-hour', userId, HOUR_MS, UPLOAD_HOURLY_LIMIT)
-  if (!uploadLimit.allowed) {
-    c.header('Retry-After', String(uploadLimit.retryAfter))
-    return c.json({ error: 'You have reached the hourly upload limit. Please try again later.' }, 429)
+  const [userUploadLimit, addressUploadLimit] = await Promise.all([
+    consumeRateLimit('upload-user-hour', userId, HOUR_MS, UPLOAD_HOURLY_LIMIT),
+    consumeRateLimit('upload-address-hour', clientAddress(c), HOUR_MS, UPLOAD_IP_HOURLY_LIMIT),
+  ])
+  if (!userUploadLimit.allowed || !addressUploadLimit.allowed) {
+    const retryAfter = Math.max(
+      userUploadLimit.allowed ? 0 : userUploadLimit.retryAfter,
+      addressUploadLimit.allowed ? 0 : addressUploadLimit.retryAfter,
+    )
+    c.header('Retry-After', String(retryAfter))
+    return c.json({ error: 'The attachment upload limit has been reached. Please try again later.' }, 429)
   }
 
   const body = Buffer.from(await c.req.arrayBuffer())
@@ -441,10 +486,17 @@ app.post('/api/me/todos/:id/attachments', async (c) => {
     return c.json({ error: 'Attachments must be between 1 byte and 5 MB.' }, 400)
   }
 
+  const [ownedTodo] = await db
+    .select({ id: todos.id })
+    .from(todos)
+    .where(and(eq(todos.id, todoId.data), eq(todos.userId, userId)))
+    .limit(1)
+  if (!ownedTodo) return c.json({ error: 'Save this todo online before attaching a file.' }, 404)
+
   let storageKey: string | undefined
   try {
     const attachment = await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upload:${userId}`}))`)
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('upload:global'))`)
 
       const [todo] = await tx
         .select({ id: todos.id })
@@ -469,6 +521,24 @@ app.post('/api/me/todos/:id/attachments', async (c) => {
         throw new UploadError('Your account has reached its 50 MB attachment limit.', 400)
       }
 
+      const [globalUsage] = await tx
+        .select({ bytes: sql<number>`coalesce(sum(${attachments.byteSize}), 0)::bigint`.mapWith(Number) })
+        .from(attachments)
+      if (globalUsage.bytes + body.byteLength > MAX_GLOBAL_STORAGE_BYTES) {
+        throw new UploadError('This demo has reached its shared attachment storage limit.', 400)
+      }
+
+      const globalUploadLimit = await consumeRateLimit(
+        'upload-global-day',
+        'all-users',
+        DAY_MS,
+        UPLOAD_GLOBAL_DAILY_LIMIT,
+      )
+      if (!globalUploadLimit.allowed) {
+        c.header('Retry-After', String(globalUploadLimit.retryAfter))
+        throw new UploadError('The shared daily attachment upload limit has been reached.', 429)
+      }
+
       storageKey = `users/${userId}/${todoId.data}/${crypto.randomUUID()}-${fileName}`
       await s3.send(
         new PutObjectCommand({
@@ -490,7 +560,14 @@ app.post('/api/me/todos/:id/attachments', async (c) => {
           contentType,
           byteSize: body.byteLength,
         })
-        .returning()
+        .returning({
+          id: attachments.id,
+          todoId: attachments.todoId,
+          fileName: attachments.fileName,
+          contentType: attachments.contentType,
+          byteSize: attachments.byteSize,
+          createdAt: attachments.createdAt,
+        })
       return created
     })
     await drainStorageDeletions()
@@ -524,7 +601,7 @@ app.get('/api/me/attachments/:id/url', async (c) => {
   const attachmentId = uuid.safeParse(c.req.param('id'))
   if (!attachmentId.success) return c.json({ error: 'Attachment not found.' }, 404)
   const [attachment] = await db
-    .select()
+    .select({ storageKey: attachments.storageKey })
     .from(attachments)
     .where(and(eq(attachments.id, attachmentId.data), eq(attachments.userId, c.get('userId'))))
     .limit(1)
@@ -537,7 +614,7 @@ app.delete('/api/me/attachments/:id', async (c) => {
   if (!attachmentId.success) return c.json({ error: 'Attachment not found.' }, 404)
   const attachment = await db.transaction(async (tx) => {
     const [found] = await tx
-      .select()
+      .select({ id: attachments.id, storageKey: attachments.storageKey })
       .from(attachments)
       .where(and(eq(attachments.id, attachmentId.data), eq(attachments.userId, c.get('userId'))))
       .limit(1)

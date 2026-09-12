@@ -11,6 +11,9 @@ if (!body.includes('todo-skeleton') || !body.includes('Neon Functions') || !body
 }
 const indexPath = resolve('dist/index.html')
 const index = await readFile(indexPath, 'utf8')
+if (/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(index)) {
+  throw new Error('Executable inline scripts are not allowed in the built page.')
+}
 const marker = '<div id="app"></div>'
 if (!index.includes(marker)) throw new Error('Could not find the application mount point while prerendering.')
 await writeFile(indexPath, index.replace(marker, `<div id="app">${body}</div>`))

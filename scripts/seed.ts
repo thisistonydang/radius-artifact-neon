@@ -90,15 +90,6 @@ if (staleStarterObjects.length) {
   )
 }
 
-const oldFactObjects = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: 'facts/' }))
-if (oldFactObjects.Contents?.length) {
-  await s3.send(
-    new DeleteObjectsCommand({
-      Bucket: bucket,
-      Delete: { Objects: oldFactObjects.Contents.flatMap((object) => (object.Key ? [{ Key: object.Key }] : [])) },
-    }),
-  )
-}
 
 await pool.end()
 console.log(`Seeded ${seedTodos.length} starter todos and ${starterAttachmentSeeds.length} example attachments.`)

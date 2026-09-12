@@ -3,21 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="A Radius artifact powered by the Neon backend platform." />
+    <meta name="description" content="A funny local-first todo list demonstrating Radius and the complete Neon backend platform." />
+    <meta property="og:title" content="radius-artifact-neon" />
+    <meta
+      property="og:description"
+      content="A funny local-first todo list demonstrating Radius and the complete Neon backend platform."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#161d27" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'sha256-yvMKCdVeeTcCARWxxJWgkoNxzAfFdVALybYOvfLEVGE='; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:8787 ws://localhost:*; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self' blob:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:8787 ws://localhost:*; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self' blob:"
     />
     <title>A simple todo list · Radius + Neon</title>
-    <script>
-      ;(() => {
-        const saved = localStorage.getItem('theme') || 'system'
-        const dark = matchMedia('(prefers-color-scheme: dark)').matches
-        document.documentElement.dataset.themeMode = saved
-        document.documentElement.dataset.theme = saved === 'system' ? (dark ? 'dark' : 'light') : saved
-      })()
-    </script>
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="app"></div>

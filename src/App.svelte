@@ -5,7 +5,7 @@
   import { api, ApiError } from './lib/api'
   import { authClient } from './lib/auth'
   import { fromStarters, loadLocalTodos, saveLocalTodos } from './lib/local-todos'
-  import { applyTheme, type ThemeMode } from './lib/theme'
+  import { applyTheme, loadTheme, type ThemeMode } from './lib/theme'
   import type { AuthUser, CloudTodo, LocalTodo, StarterAttachment, StarterTodo } from './lib/types'
 
   const MAX_TODOS = 10
@@ -47,7 +47,7 @@
   $: completedCount = todos.filter((todo) => todo.completed).length
 
   onMount(() => {
-    themeMode = (localStorage.getItem('theme') as ThemeMode | null) ?? 'system'
+    themeMode = loadTheme()
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const followSystemTheme = () => {
       if (themeMode === 'system') applyTheme('system')
@@ -97,14 +97,15 @@
 
   function updateTodos(next: LocalTodo[], dirty = true) {
     todos = next.slice(0, MAX_TODOS)
-    saveLocalTodos(localStorage, todos)
+    const savedLocally = saveLocalTodos(localStorage, todos)
     if (dirty) {
       changeVersion += 1
       cloudDirty = true
       if (user && cloudSyncReady) void saveOnline()
     }
     message = ''
-    if (!user || cloudSyncReady) error = ''
+    if (!savedLocally && !user) error = 'This browser could not save your changes on this device.'
+    else if (!user || cloudSyncReady) error = ''
   }
 
   function addTodo() {
@@ -137,7 +138,7 @@
   }
 
   function resetTodos() {
-    if (!confirm('Reset this device to the four starter todos?')) return
+    if (!confirm('Reset your list to the four starter todos?')) return
     updateTodos(fromStarters(starters))
   }
 
@@ -428,6 +429,8 @@
   <title>A simple todo list · Radius + Neon</title>
 </svelte:head>
 
+<a class="skip-link" href="#todo-app">Skip to todo list</a>
+
 <header class="site-header">
   <div class="header-actions">
     <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
@@ -441,11 +444,12 @@
       <span>{themeMode}</span>
     </button>
     {#if user}
-      <button class="bracket-button" type="button" on:click={signOut}>[ sign out ]</button>
+      <button class="bracket-button" type="button" on:click={signOut} disabled={Boolean(fileBusy)}>[ sign out ]</button>
     {:else}
       <button
         class="bracket-button"
         type="button"
+        disabled={loading || authLoading}
         on:click={() => {
           authMode = 'signin'
           requestAuth('signin')
@@ -473,7 +477,7 @@
     </ul>
   </section>
 
-  <section class="todo-section" aria-labelledby="todo-title">
+  <section id="todo-app" class="todo-section" aria-labelledby="todo-title" tabindex="-1">
     <div class="todo-heading">
       <div>
         <h2 id="todo-title">A simple todo list</h2>
@@ -483,6 +487,7 @@
             <button
               class="inline-link"
               type="button"
+              disabled={loading || authLoading}
               on:click={() => {
                 authMode = 'signup'
                 requestAuth('save')
@@ -573,7 +578,7 @@
 
                 <div class="todo-actions">
                   <button type="button" on:click={() => startEditing(todo)}>edit</button>
-                  <button type="button" on:click={() => beginAttachment(todo)} disabled={fileBusy === todo.clientId}>
+                  <button type="button" on:click={() => beginAttachment(todo)} disabled={Boolean(fileBusy)}>
                     {fileBusy === todo.clientId ? 'uploading…' : 'attach file'}
                   </button>
                   <button type="button" on:click={() => removeTodo(todo.clientId)}>delete</button>
@@ -616,7 +621,14 @@
         <form on:submit|preventDefault={submitAuth}>
           <label
             ><span>EMAIL</span
-            ><input bind:this={emailInput} type="email" bind:value={email} autocomplete="email" required /></label
+            ><input
+              bind:this={emailInput}
+              type="email"
+              bind:value={email}
+              autocomplete="email"
+              maxlength="254"
+              required
+            /></label
           >
           <label>
             <span>PASSWORD</span>
@@ -625,6 +637,7 @@
               bind:value={password}
               autocomplete={authMode === 'signup' ? 'new-password' : 'current-password'}
               minlength="8"
+              maxlength="128"
               required
             />
           </label>

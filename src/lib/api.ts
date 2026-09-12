@@ -23,7 +23,21 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
     headers.set('authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers })
+  const timeoutMs =
+    path === '/api/chat' ? 35_000 : init.method === 'POST' && path.endsWith('/attachments') ? 65_000 : 20_000
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+      signal: init.signal ?? AbortSignal.timeout(timeoutMs),
+    })
+  } catch (caught) {
+    if (caught instanceof DOMException && (caught.name === 'TimeoutError' || caught.name === 'AbortError')) {
+      throw new ApiError('The request timed out. Please try again.', 408)
+    }
+    throw caught
+  }
   const data = (await response.json().catch(() => ({}))) as T & { error?: string }
   if (!response.ok) {
     const message =

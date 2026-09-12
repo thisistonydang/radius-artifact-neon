@@ -24,13 +24,24 @@ describe('local todo workspace', () => {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
     }
-    saveLocalTodos(storage, fromStarters([starter]))
+    expect(saveLocalTodos(storage, fromStarters([starter]))).toBe(true)
     expect(values.has(LOCAL_TODOS_KEY)).toBe(true)
     expect(loadLocalTodos(storage)).toHaveLength(1)
   })
 
+  it('does not crash when browser storage is unavailable', () => {
+    const storage = { setItem: () => { throw new Error('blocked') } }
+    expect(saveLocalTodos(storage, fromStarters([starter]))).toBe(false)
+  })
+
   it('rejects malformed state', () => {
     const storage = { getItem: () => '{"version":1,"todos":[{"title":42}]}' }
+    expect(loadLocalTodos(storage)).toBeNull()
+  })
+
+  it('rejects duplicate todo IDs that would break keyed rendering', () => {
+    const todo = `{"clientId":"${starter.id}","title":"Duplicate","completed":false}`
+    const storage = { getItem: () => `{"version":1,"todos":[${todo},${todo}]}` }
     expect(loadLocalTodos(storage)).toBeNull()
   })
 

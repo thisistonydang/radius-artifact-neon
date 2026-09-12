@@ -20,7 +20,7 @@ function isTodo(value: unknown): value is LocalTodo {
     todo.title.trim().length > 0 &&
     todo.title.length <= 200 &&
     typeof todo.completed === 'boolean' &&
-    (todo.starterSlug === undefined || typeof todo.starterSlug === 'string')
+    (todo.starterSlug === undefined || (typeof todo.starterSlug === 'string' && todo.starterSlug.length <= 100))
   )
 }
 
@@ -40,6 +40,7 @@ export function loadLocalTodos(storage: Pick<Storage, 'getItem'>): LocalTodo[] |
     const workspace = JSON.parse(raw) as Partial<StoredWorkspace>
     if (workspace.version !== 1 || !Array.isArray(workspace.todos)) return null
     if (workspace.todos.length > MAX_TODOS || !workspace.todos.every(isTodo)) return null
+    if (new Set(workspace.todos.map((todo) => todo.clientId)).size !== workspace.todos.length) return null
     return workspace.todos
   } catch {
     return null
@@ -52,5 +53,10 @@ export function saveLocalTodos(storage: Pick<Storage, 'setItem'>, todos: LocalTo
     updatedAt: new Date().toISOString(),
     todos: todos.slice(0, MAX_TODOS),
   }
-  storage.setItem(LOCAL_TODOS_KEY, JSON.stringify(workspace))
+  try {
+    storage.setItem(LOCAL_TODOS_KEY, JSON.stringify(workspace))
+    return true
+  } catch {
+    return false
+  }
 }

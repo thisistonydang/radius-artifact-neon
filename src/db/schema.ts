@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -55,6 +56,7 @@ export const todos = pgTable(
   },
   (table) => [
     uniqueIndex('todos_user_client_idx').on(table.userId, table.clientId),
+    uniqueIndex('todos_id_user_idx').on(table.id, table.userId),
     index('todos_user_position_idx').on(table.userId, table.position),
   ],
 )
@@ -96,9 +98,7 @@ export const attachments = pgTable(
   'attachments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    todoId: uuid('todo_id')
-      .notNull()
-      .references(() => todos.id, { onDelete: 'cascade' }),
+    todoId: uuid('todo_id').notNull(),
     userId: text('user_id').notNull(),
     storageKey: text('storage_key').notNull(),
     fileName: text('file_name').notNull(),
@@ -107,6 +107,11 @@ export const attachments = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: 'attachments_todo_user_fk',
+      columns: [table.todoId, table.userId],
+      foreignColumns: [todos.id, todos.userId],
+    }).onDelete('cascade'),
     uniqueIndex('attachments_storage_key_idx').on(table.storageKey),
     index('attachments_todo_idx').on(table.todoId),
     index('attachments_user_idx').on(table.userId),

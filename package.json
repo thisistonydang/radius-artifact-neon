@@ -2,8 +2,17 @@
   "name": "radius-artifact-neon",
   "private": true,
   "version": "0.1.0",
+  "description": "A demo Radius artifact with a complete Neon backend.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thisistonydang/radius-artifact-neon.git"
+  },
   "type": "module",
   "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build && vite build --ssr src/entry-server.ts --outDir .svelte-ssr && tsx scripts/prerender.ts && tsx scripts/write-runtime-config.ts",

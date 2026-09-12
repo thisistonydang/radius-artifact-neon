@@ -87,6 +87,23 @@ button:disabled {
   outline-offset: 2px;
 }
 
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 20;
+  padding: 0.55rem 0.7rem;
+  color: var(--text);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 ::selection {
   background: rgb(106 159 204 / 25%);
 }
