@@ -51,7 +51,7 @@
       <button class="bracket-button" type="button" on:click={() => (question = '')} disabled={loading || !question}>
         [ clear ]
       </button>
-      <span class="ask-button-wrap" title={loading ? undefined : askHint}>
+      <span class="ask-button-wrap" data-tooltip={loading ? undefined : askHint}>
         <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
           {loading ? '[ thinking… ]' : '[ ask ]'}
         </button>
