@@ -458,10 +458,14 @@ input:focus {
   font-size: 0.64rem;
 }
 
-.prompt-list button:hover {
+.prompt-list button:hover:not(:disabled) {
   border-color: var(--accent-border);
   color: var(--text);
   background: var(--accent-soft);
+}
+
+.prompt-list button:disabled {
+  cursor: default;
 }
 
 .chat-panel label,
