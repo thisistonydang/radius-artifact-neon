@@ -1,0 +1,47 @@
+{
+  "name": "radius-artifact-neon",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsx scripts/write-runtime-config.ts",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json && tsc -p tsconfig.server.json",
+    "test": "vitest run",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "storage:cors": "tsx scripts/configure-storage-cors.ts",
+    "neon:dev": "neon dev",
+    "neon:deploy": "neon deploy --env .env.local"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "latest",
+    "@aws-sdk/s3-request-presigner": "latest",
+    "@neon/ai-sdk-provider": "latest",
+    "@neon/env": "latest",
+    "@neon/functions": "latest",
+    "@neondatabase/neon-js": "latest",
+    "ai": "latest",
+    "drizzle-orm": "latest",
+    "hono": "latest",
+    "jose": "latest",
+    "pg": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@neon/config": "latest",
+    "@sveltejs/vite-plugin-svelte": "latest",
+    "@tsconfig/svelte": "latest",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "dotenv": "latest",
+    "simple-icons": "latest",
+    "svelte": "latest",
+    "svelte-check": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}

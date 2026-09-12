@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-theme-mode="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A Radius artifact powered by the Neon backend platform." />
+    <meta name="theme-color" content="#161d27" />
+    <title>web dev fun facts</title>
+    <script>
+      ;(() => {
+        const saved = localStorage.getItem('theme') || 'system'
+        const dark = matchMedia('(prefers-color-scheme: dark)').matches
+        document.documentElement.dataset.themeMode = saved
+        document.documentElement.dataset.theme = saved === 'system' ? (dark ? 'dark' : 'light') : saved
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
