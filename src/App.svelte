@@ -65,7 +65,7 @@
       cloudDirty = true
       if (user) {
         clearTimeout(saveTimer)
-        saveTimer = setTimeout(() => void saveOnline(true), 500)
+        saveTimer = setTimeout(() => void saveOnline(), 500)
       }
     }
     message = ''
@@ -204,7 +204,7 @@
     message = 'Signed out. The starter list has been restored.'
   }
 
-  async function saveOnline(silent = false) {
+  async function saveOnline() {
     if (!user) {
       requestAuth('save')
       return
@@ -214,7 +214,6 @@
     try {
       cloudTodos = (await api.saveTodos(todos)).todos
       cloudDirty = false
-      if (!silent) message = 'Saved online with Neon Postgres.'
     } catch (caught) {
       error = caught instanceof Error ? caught.message : 'Could not save your todos online.'
     } finally {
