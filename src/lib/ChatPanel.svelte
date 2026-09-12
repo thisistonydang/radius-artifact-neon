@@ -32,7 +32,7 @@
 
   <div class="prompt-list" aria-label="Example questions">
     {#each examples as example}
-      <button type="button" on:click={() => (question = example)}>{example}</button>
+      <button type="button" on:click={() => (question = example)} disabled={loading}>{example}</button>
     {/each}
   </div>
 
