@@ -9,6 +9,8 @@
   let error = ''
   let loading = false
 
+  $: askHint = !todos.length ? 'Add a todo first.' : question.trim().length < 2 ? 'Type a question first.' : undefined
+
   const examples = ['What should I do first?', 'Which item is already done?', 'Do I need more snacks?']
 
   async function ask() {
@@ -49,9 +51,11 @@
       <button class="bracket-button" type="button" on:click={() => (question = '')} disabled={loading || !question}>
         [ clear ]
       </button>
-      <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
-        {loading ? '[ thinking… ]' : '[ ask ]'}
-      </button>
+      <span class="ask-button-wrap" title={loading ? undefined : askHint}>
+        <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
+          {loading ? '[ thinking… ]' : '[ ask ]'}
+        </button>
+      </span>
     </div>
   </form>
 

@@ -483,6 +483,18 @@ input:focus {
   cursor: not-allowed;
 }
 
+.ask-button-wrap {
+  display: inline-flex;
+}
+
+.ask-button-wrap:has(button:disabled) {
+  cursor: not-allowed;
+}
+
+.ask-button-wrap button:disabled {
+  pointer-events: none;
+}
+
 .agent-answer {
   margin-top: 1.2rem;
   padding: 0.9rem;
@@ -657,7 +669,8 @@ footer p {
     flex-direction: column;
   }
 
-  .question-row .bracket-button {
+  .question-row .bracket-button,
+  .question-row .ask-button-wrap {
     align-self: flex-start;
   }
 }
