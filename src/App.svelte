@@ -281,7 +281,9 @@
     }
   }
 
-  function changeTheme() {
+  function cycleTheme() {
+    const order: ThemeMode[] = ['system', 'light', 'dark']
+    themeMode = order[(order.indexOf(themeMode) + 1) % order.length]
     applyTheme(themeMode)
   }
 </script>
@@ -292,7 +294,7 @@
 
 <header class="site-header">
   <div class="header-actions">
-    <label class="theme-picker">
+    <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
       {#if themeMode === 'dark'}
         <Moon size={16} strokeWidth={1.75} />
       {:else if themeMode === 'light'}
@@ -300,13 +302,8 @@
       {:else}
         <Monitor size={16} strokeWidth={1.75} />
       {/if}
-      <span class="sr-only">Theme</span>
-      <select bind:value={themeMode} on:change={changeTheme} aria-label="Theme">
-        <option value="system">system</option>
-        <option value="light">light</option>
-        <option value="dark">dark</option>
-      </select>
-    </label>
+      <span>{themeMode}</span>
+    </button>
     {#if user}
       <button class="bracket-button" type="button" on:click={signOut}>[ sign out ]</button>
     {:else}
@@ -444,10 +441,6 @@
     </div>
 
     <ChatPanel {todos} />
-    <p class="privacy-note">
-      Todos stay in this browser unless you sign in. The current list is sent to Neon only when you ask
-      the AI a question.
-    </p>
   </section>
 </main>
 
