@@ -398,6 +398,11 @@ input:focus {
   font-size: 0.68rem;
 }
 
+.todo-attachments > button {
+  justify-self: start;
+  text-align: left;
+}
+
 .todo-attachments span {
   display: flex;
   gap: 0.7rem;
