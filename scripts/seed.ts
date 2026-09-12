@@ -5,10 +5,10 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-import { eq, notInArray } from 'drizzle-orm'
+import { notInArray } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
-import { rubberDuckGuide, starterTodos as seedTodos } from '../seed/todos.js'
+import { starterAttachmentSeeds, starterTodos as seedTodos } from '../seed/todos.js'
 import { normalizePostgresUrl } from '../src/db/connection.js'
 import { starterAttachments, starterTodos } from '../src/db/schema.js'
 
@@ -38,40 +38,56 @@ for (const todo of seedTodos) {
 
 await db.delete(starterTodos).where(notInArray(starterTodos.slug, seedTodos.map((todo) => todo.slug)))
 
-const guideBody = Buffer.from(rubberDuckGuide)
-const guideKey = 'starter/rubber-duck-review-guide.md'
-await s3.send(
-  new PutObjectCommand({
-    Bucket: bucket,
-    Key: guideKey,
-    Body: guideBody,
-    ContentType: 'text/markdown',
-    CacheControl: 'public, max-age=3600',
-  }),
-)
+for (const attachment of starterAttachmentSeeds) {
+  const starterTodoId = seededIds.get(attachment.todoSlug)
+  if (!starterTodoId) throw new Error(`Starter todo ${attachment.todoSlug} was not seeded`)
 
-const rubberDuckId = seededIds.get('rubber-duck-review')
-if (!rubberDuckId) throw new Error('Rubber duck starter todo was not seeded')
-const [existingAttachment] = await db
-  .select({ id: starterAttachments.id })
-  .from(starterAttachments)
-  .where(eq(starterAttachments.starterTodoId, rubberDuckId))
-  .limit(1)
+  const body = Buffer.from(attachment.body)
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: attachment.storageKey,
+      Body: body,
+      ContentType: attachment.contentType,
+      CacheControl: 'public, max-age=3600',
+    }),
+  )
 
-const attachmentValues = {
-  starterTodoId: rubberDuckId,
-  storageKey: guideKey,
-  fileName: 'rubber-duck-review-guide.md',
-  contentType: 'text/markdown',
-  byteSize: guideBody.byteLength,
-}
-if (existingAttachment) {
   await db
-    .update(starterAttachments)
-    .set(attachmentValues)
-    .where(eq(starterAttachments.id, existingAttachment.id))
-} else {
-  await db.insert(starterAttachments).values(attachmentValues)
+    .insert(starterAttachments)
+    .values({
+      starterTodoId,
+      storageKey: attachment.storageKey,
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      byteSize: body.byteLength,
+    })
+    .onConflictDoUpdate({
+      target: starterAttachments.starterTodoId,
+      set: {
+        storageKey: attachment.storageKey,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        byteSize: body.byteLength,
+      },
+    })
+}
+
+const attachmentKeys = starterAttachmentSeeds.map((attachment) => attachment.storageKey)
+await db.delete(starterAttachments).where(notInArray(starterAttachments.storageKey, attachmentKeys))
+
+const starterObjects = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: 'starter/' }))
+const staleStarterObjects =
+  starterObjects.Contents?.flatMap((object) =>
+    object.Key && !attachmentKeys.includes(object.Key) ? [{ Key: object.Key }] : [],
+  ) ?? []
+if (staleStarterObjects.length) {
+  await s3.send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: staleStarterObjects },
+    }),
+  )
 }
 
 const oldFactObjects = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: 'facts/' }))
@@ -85,4 +101,4 @@ if (oldFactObjects.Contents?.length) {
 }
 
 await pool.end()
-console.log(`Seeded ${seedTodos.length} starter todos and one example attachment.`)
+console.log(`Seeded ${seedTodos.length} starter todos and ${starterAttachmentSeeds.length} example attachments.`)

@@ -20,6 +20,7 @@
   let editTitle = ''
   let cloudDirty = true
   let saving = false
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
   let fileBusy = ''
 
   let themeMode: ThemeMode = 'system'
@@ -57,7 +58,13 @@
   function updateTodos(next: LocalTodo[], dirty = true) {
     todos = next.slice(0, MAX_TODOS)
     saveLocalTodos(localStorage, todos)
-    if (dirty) cloudDirty = true
+    if (dirty) {
+      cloudDirty = true
+      if (user) {
+        clearTimeout(saveTimer)
+        saveTimer = setTimeout(() => void saveOnline(true), 500)
+      }
+    }
     message = ''
   }
 
@@ -173,7 +180,7 @@
     message = 'Signed out. Your local list is still on this device.'
   }
 
-  async function saveOnline() {
+  async function saveOnline(silent = false) {
     if (!user) {
       requestAuth('save')
       return
@@ -183,7 +190,7 @@
     try {
       cloudTodos = (await api.saveTodos(todos)).todos
       cloudDirty = false
-      message = 'Saved online with Neon Postgres.'
+      if (!silent) message = 'Saved online with Neon Postgres.'
     } catch (caught) {
       error = caught instanceof Error ? caught.message : 'Could not save your todos online.'
     } finally {
@@ -279,7 +286,6 @@
 </svelte:head>
 
 <header class="site-header">
-  <a class="brand" href="#top">todo list</a>
   <div class="header-actions">
     <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
       {themeMode === 'dark' ? '☾' : themeMode === 'light' ? '☀' : '◐'} <span>{themeMode}</span>
@@ -296,23 +302,42 @@
   <section class="hero">
     <h1>This is a Radius artifact with a Neon backend.</h1>
     <p class="hero-copy">
-      <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a> serves this
-      frontend. <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a> handles the
-      backend: Neon Functions serve the API endpoints, Lakebase Postgres stores saved todos, Object
-      Storage holds file attachments, Neon Auth protects accounts, and AI Gateway answers questions.
+      This site has a simple todo app below.
+      <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a> serves the
+      frontend, and <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a> provides its
+      backend.
     </p>
+    <ul class="backend-list">
+      <li><strong>Neon Functions</strong> serve the API that connects the Radius frontend to the Neon backend.</li>
+      <li><strong>Lakebase Postgres</strong> stores the todos when an account is created.</li>
+      <li><strong>Object Storage</strong> holds files attached to todos.</li>
+      <li><strong>Neon Auth</strong> manages optional accounts and protects their data.</li>
+      <li><strong>AI Gateway</strong> answers questions about the current todo list.</li>
+    </ul>
   </section>
 
   <section class="todo-section" aria-labelledby="todo-title">
     <div class="todo-heading">
       <div>
         <h2 id="todo-title">A simple todo list</h2>
-        <p>Try everything without an account. Your changes are saved in this browser.</p>
+        <p>
+          Changes stay local unless you
+          <button
+            class="inline-link"
+            type="button"
+            on:click={() => {
+              authMode = 'signup'
+              requestAuth('save')
+            }}>create an account</button
+          >.
+        </p>
       </div>
-      <div class="save-status">
-        <span>{user && !cloudDirty ? 'Saved online' : 'Saved on this device'}</span>
-        {#if user}<strong>{user.email}</strong>{/if}
-      </div>
+      {#if user}
+        <div class="save-status">
+          {#if saving}<span>Saving…</span>{:else if !cloudDirty}<span>Saved online</span>{/if}
+          <strong>{user.email}</strong>
+        </div>
+      {/if}
     </div>
 
     <div class="todo-app">
@@ -321,9 +346,6 @@
         <div>
           {#if user}<button type="button" on:click={loadOnline}>load online</button>{/if}
           <button type="button" on:click={resetTodos}>reset</button>
-          <button class="bracket-button primary" type="button" on:click={saveOnline} disabled={saving}>
-            {saving ? '[ saving… ]' : '[ save online ]'}
-          </button>
         </div>
       </div>
 
@@ -401,8 +423,8 @@
 
     <ChatPanel {todos} />
     <p class="privacy-note">
-      Todos stay in this browser unless you select “save online.” The current list is sent to Neon only
-      when you ask the AI a question.
+      Todos stay in this browser unless you sign in. The current list is sent to Neon only when you ask
+      the AI a question.
     </p>
   </section>
 </main>

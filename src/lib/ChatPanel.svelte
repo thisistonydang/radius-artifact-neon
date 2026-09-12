@@ -39,7 +39,16 @@
   <form on:submit|preventDefault={ask}>
     <label for="todo-question">QUESTION</label>
     <div class="question-row">
-      <input id="todo-question" bind:value={question} maxlength="500" placeholder="Ask about this list..." />
+      <input
+        id="todo-question"
+        bind:value={question}
+        maxlength="500"
+        placeholder="Ask about this list..."
+        disabled={loading}
+      />
+      <button class="bracket-button" type="button" on:click={() => (question = '')} disabled={loading || !question}>
+        [ clear ]
+      </button>
       <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
         {loading ? '[ thinking… ]' : '[ ask ]'}
       </button>

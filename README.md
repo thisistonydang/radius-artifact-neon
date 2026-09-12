@@ -24,7 +24,7 @@ flowchart LR
 | Radius artifact | Hosts the compiled HTML, CSS, and JavaScript |
 | Browser `localStorage` | Saves guest changes on one device |
 | Lakebase Postgres | Stores the starter list and account lists |
-| Neon Object Storage | Stores the example file and account attachments |
+| Neon Object Storage | Stores the example files and account attachments |
 | Neon Function | Provides the API and keeps credentials server-side |
 | Neon Auth | Protects online saving and uploads |
 | Neon AI Gateway | Answers questions about the current list |
@@ -138,7 +138,7 @@ Open http://localhost:5173.
 ### Without an account
 
 - Four starter todos load from Lakebase Postgres.
-- The first starter todo has a Markdown attachment in Object Storage.
+- Every starter todo has a small text or Markdown attachment in Object Storage.
 - Changes are stored under `radius-neon-todos:v1` in the browser.
 - Creating, editing, completing, deleting, and resetting todos require no account.
 - The current list is sent to the Function only when the visitor asks an AI question.
@@ -158,7 +158,7 @@ The artifact and Neon Auth are on different origins. Browsers that strictly bloc
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Public | Backend health |
-| `GET` | `/api/starter-todos` | Public | Starter todos and example attachment |
+| `GET` | `/api/starter-todos` | Public | Starter todos and example attachments |
 | `POST` | `/api/chat` | Public | Ask about the supplied todo list |
 | `GET` | `/api/me/todos` | Authenticated | Load an online list |
 | `PUT` | `/api/me/todos` | Authenticated | Save an online list |
@@ -195,7 +195,7 @@ pnpm check          # Type-check Svelte, scripts, and Function code
 pnpm test           # Run unit tests
 pnpm build          # Build dist/ and write runtime config
 pnpm db:migrate     # Apply SQL migrations
-pnpm db:seed        # Seed four todos and one attachment
+pnpm db:seed        # Seed four todos and four attachments
 pnpm storage:cors   # Apply bucket CORS from APP_ORIGINS
 pnpm neon:deploy    # Deploy neon.ts using .env.local
 ```
