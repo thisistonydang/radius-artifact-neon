@@ -4,7 +4,7 @@ A small example showing that a multi-file [Radius artifact](https://radius.earen
 
 The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only to sync a list online or upload a file.
 
-**Live demo:** https://01m2bj2gvpf0t88sf41r93gf76.trove.sh/
+**Live demo:** https://01m2bvxqp2en5vrj4vfw86gy5z.trove.sh/
 
 ## Architecture
 
