@@ -79,7 +79,7 @@ let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
 
 async function requireUser(c: Context<AppEnv>, next: Next) {
   const auth = c.req.header('authorization')
-  if (!auth?.toLowerCase().startsWith('bearer ')) return c.json({ error: 'Sign in required.' }, 401)
+  if (!auth?.toLowerCase().startsWith('bearer ')) return c.json({ error: 'Authentication required.' }, 401)
 
   const jwksUrl = process.env.NEON_AUTH_JWKS_URL
   const authBaseUrl = process.env.NEON_AUTH_BASE_URL

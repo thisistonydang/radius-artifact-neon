@@ -153,6 +153,10 @@ h2 {
   align-items: center;
 }
 
+.header-actions {
+  gap: 1.25rem;
+}
+
 .theme-toggle,
 .text-button,
 .todo-toolbar button:not(.bracket-button),
@@ -170,7 +174,10 @@ h2 {
 }
 
 .theme-toggle {
+  display: inline-flex;
   min-height: 40px;
+  gap: 0.4rem;
+  align-items: center;
   text-decoration: none;
 }
 
@@ -283,14 +290,6 @@ footer {
   font-family: var(--mono);
   font-size: 0.66rem;
   text-align: right;
-}
-
-.save-status strong {
-  max-width: 240px;
-  overflow: hidden;
-  color: var(--copy);
-  font-weight: 400;
-  text-overflow: ellipsis;
 }
 
 .todo-app,

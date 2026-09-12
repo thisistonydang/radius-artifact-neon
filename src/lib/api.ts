@@ -17,13 +17,19 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
   if (authenticated) {
     const token = await getAuthToken()
-    if (!token) throw new ApiError('Sign in required.', 401)
+    if (!token) throw new ApiError('Your account session is unavailable. Please sign in again.', 401)
     headers.set('authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers })
   const data = (await response.json().catch(() => ({}))) as T & { error?: string }
-  if (!response.ok) throw new ApiError(data.error ?? `Request failed with status ${response.status}.`, response.status)
+  if (!response.ok) {
+    const message =
+      response.status === 401
+        ? 'Your account session is unavailable. Please sign in again.'
+        : data.error ?? `Request failed with status ${response.status}.`
+    throw new ApiError(message, response.status)
+  }
   return data
 }
 

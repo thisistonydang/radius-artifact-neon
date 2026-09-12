@@ -2,7 +2,7 @@
 
 A small example showing that a multi-file [Radius artifact](https://radius.earendil.com/) can use [Neon](https://neon.com/) as a complete backend.
 
-The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only when someone saves a list online or uploads a file.
+The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only to sync a list online or upload a file.
 
 **Live demo:** https://01m2bj2gvpf0t88sf41r93gf76.trove.sh/
 
@@ -145,9 +145,11 @@ Open http://localhost:5173.
 
 ### With an account
 
-- Selecting **save online** or **attach file** opens Neon Auth if needed.
-- Saved lists are scoped to the verified Neon Auth user ID.
-- Users can load an online list on another device.
+- Creating an account saves the current browser list to that account.
+- Signing in to an existing account replaces the browser list with the account’s saved list.
+- Signed-in changes save automatically and are scoped to the verified Neon Auth user ID.
+- Signing out restores the four starter todos in `localStorage`.
+- Selecting **attach file** opens Neon Auth if needed.
 - Each saved todo supports up to three PNG, JPEG, PDF, Markdown, or text attachments.
 - Each attachment is limited to 5 MB.
 

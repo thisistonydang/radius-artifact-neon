@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Monitor, Moon, Sun } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import { api } from './lib/api'
@@ -42,7 +43,9 @@
     themeMode = (localStorage.getItem('theme') as ThemeMode | null) ?? 'system'
     const local = loadLocalTodos(localStorage)
     if (local) todos = local
-    await Promise.all([loadStarters(local), refreshSession()])
+    await loadStarters(local)
+    await refreshSession()
+    if (user && (await loadCloudTodos())) applyCloudTodos()
     loading = false
   })
 
@@ -117,7 +120,6 @@
       const result = await authClient.getSession()
       const sessionUser = result.data?.user
       user = sessionUser ? { id: sessionUser.id, email: sessionUser.email, name: sessionUser.name } : null
-      if (user) await loadCloudTodos()
     } catch {
       user = null
     } finally {
@@ -128,9 +130,24 @@
   async function loadCloudTodos() {
     try {
       cloudTodos = (await api.cloudTodos()).todos
+      return true
     } catch (caught) {
       error = caught instanceof Error ? caught.message : 'Could not load your saved todos.'
+      return false
     }
+  }
+
+  function applyCloudTodos() {
+    updateTodos(
+      cloudTodos.map((todo) => ({
+        clientId: todo.clientId,
+        starterSlug: starters.find((starter) => starter.id === todo.clientId)?.slug,
+        title: todo.title,
+        completed: todo.completed,
+      })),
+      false,
+    )
+    cloudDirty = false
   }
 
   function requestAuth(action: 'signin' | 'save' | 'attach') {
@@ -150,18 +167,23 @@
     authBusy = true
     authError = ''
     try {
-      const result =
-        authMode === 'signup'
-          ? await authClient.signUp.email({ name: email.split('@')[0] || 'Todo maker', email, password })
-          : await authClient.signIn.email({ email, password })
+      const signingUp = authMode === 'signup'
+      const result = signingUp
+        ? await authClient.signUp.email({ name: email.split('@')[0] || 'Todo maker', email, password })
+        : await authClient.signIn.email({ email, password })
       if (result.error) throw new Error(result.error.message ?? 'Authentication failed.')
       await refreshSession()
+      if (!user) throw new Error('Could not start your account session. Please try again.')
       authOpen = false
       password = ''
-      if (pendingAction === 'save' || pendingAction === 'attach') await saveOnline()
-      if (pendingAction === 'attach') message = 'Your list is saved. Select “attach file” again to choose a file.'
-      if (pendingAction === 'signin') {
-        message = cloudTodos.length ? 'Signed in. Load your online list or save this device’s list.' : 'Signed in. Save this list when you are ready.'
+
+      if (signingUp) {
+        await saveOnline()
+        if (pendingAction === 'attach') {
+          message = 'Your list is saved. Select “attach file” again to choose a file.'
+        }
+      } else if (await loadCloudTodos()) {
+        applyCloudTodos()
       }
       pendingAction = null
     } catch (caught) {
@@ -173,11 +195,13 @@
 
   async function signOut() {
     if (!authClient) return
+    clearTimeout(saveTimer)
     await authClient.signOut()
     user = null
     cloudTodos = []
     cloudDirty = true
-    message = 'Signed out. Your local list is still on this device.'
+    if (starters.length) updateTodos(fromStarters(starters), false)
+    message = 'Signed out. The starter list has been restored.'
   }
 
   async function saveOnline(silent = false) {
@@ -196,22 +220,6 @@
     } finally {
       saving = false
     }
-  }
-
-  async function loadOnline() {
-    if (!user) return
-    await loadCloudTodos()
-    if (!cloudTodos.length) {
-      message = 'There is no online list yet. Save this list first.'
-      return
-    }
-    if (cloudDirty && !confirm('Replace the list on this device with your online list?')) return
-    updateTodos(
-      cloudTodos.map((todo) => ({ clientId: todo.clientId, title: todo.title, completed: todo.completed })),
-      false,
-    )
-    cloudDirty = false
-    message = 'Loaded your online list.'
   }
 
   function normalizedFile(file: File) {
@@ -288,12 +296,26 @@
 <header class="site-header">
   <div class="header-actions">
     <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
-      {themeMode === 'dark' ? '☾' : themeMode === 'light' ? '☀' : '◐'} <span>{themeMode}</span>
+      {#if themeMode === 'dark'}
+        <Moon size={16} strokeWidth={1.75} />
+      {:else if themeMode === 'light'}
+        <Sun size={16} strokeWidth={1.75} />
+      {:else}
+        <Monitor size={16} strokeWidth={1.75} />
+      {/if}
+      <span>{themeMode}</span>
     </button>
     {#if user}
       <button class="bracket-button" type="button" on:click={signOut}>[ sign out ]</button>
     {:else}
-      <button class="bracket-button" type="button" on:click={() => requestAuth('signin')}>[ sign in ]</button>
+      <button
+        class="bracket-button"
+        type="button"
+        on:click={() => {
+          authMode = 'signin'
+          requestAuth('signin')
+        }}>[ sign in ]</button
+      >
     {/if}
   </div>
 </header>
@@ -320,22 +342,23 @@
     <div class="todo-heading">
       <div>
         <h2 id="todo-title">A simple todo list</h2>
-        <p>
-          Changes stay local unless you
-          <button
-            class="inline-link"
-            type="button"
-            on:click={() => {
-              authMode = 'signup'
-              requestAuth('save')
-            }}>create an account</button
-          >.
-        </p>
+        {#if !user}
+          <p>
+            Changes stay local unless you
+            <button
+              class="inline-link"
+              type="button"
+              on:click={() => {
+                authMode = 'signup'
+                requestAuth('save')
+              }}>create an account</button
+            >.
+          </p>
+        {/if}
       </div>
       {#if user}
         <div class="save-status">
           {#if saving}<span>Saving…</span>{:else if !cloudDirty}<span>Saved online</span>{/if}
-          <strong>{user.email}</strong>
         </div>
       {/if}
     </div>
@@ -344,7 +367,6 @@
       <div class="todo-toolbar">
         <span>{completedCount} of {todos.length} complete</span>
         <div>
-          {#if user}<button type="button" on:click={loadOnline}>load online</button>{/if}
           <button type="button" on:click={resetTodos}>reset</button>
         </div>
       </div>
