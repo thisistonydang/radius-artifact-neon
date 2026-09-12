@@ -1,7 +1,9 @@
 import { getAuthToken } from './auth'
 import type { CloudTodo, LocalTodo, StarterTodo } from './types'
 
-const baseUrl = (window.APP_CONFIG?.apiUrl ?? 'http://localhost:8787').replace(/\/$/, '')
+const baseUrl = (
+  typeof window === 'undefined' ? 'http://localhost:8787' : (window.APP_CONFIG?.apiUrl ?? 'http://localhost:8787')
+).replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(

@@ -33,7 +33,7 @@ The frontend contains only public service URLs. Database, storage, and AI creden
 
 ## Stack
 
-- Svelte 5 and Vite
+- Svelte 5 and Vite with a build-time prerendered page shell
 - Hono
 - Drizzle ORM and `pg`
 - Neon Functions, Auth, Object Storage, AI Gateway, and Lakebase Postgres
@@ -57,6 +57,7 @@ functions/api.ts             Hono API deployed as a Neon Function
 src/                         Svelte frontend and database schema
 seed/todos.ts                Four funny starter todos and four example files
 scripts/seed.ts              Postgres and Object Storage seed script
+scripts/prerender.ts         Renders the static page shell and loading skeleton
 scripts/write-runtime-config.ts
                              Creates public dist/config.json
 neon.ts                      Branch-aware Neon backend definition
@@ -190,7 +191,7 @@ pnpm build
 pnpm audit --prod
 ```
 
-Publish the contents of `dist/` as one Radius artifact. Keep publishing revisions to the same artifact when you want its URL and browser `localStorage` to remain stable.
+The build prerenders the static introduction and a four-row todo skeleton into `dist/index.html`, then hydrates it in the browser. Publish the contents of `dist/` as one Radius artifact. Keep publishing revisions to the same artifact when you want its URL and browser `localStorage` to remain stable.
 
 ## Useful commands
 

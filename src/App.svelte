@@ -9,6 +9,7 @@
   import type { AuthUser, CloudTodo, LocalTodo, StarterAttachment, StarterTodo } from './lib/types'
 
   const MAX_TODOS = 10
+  const SKELETON_ROWS = 4
 
   let todos: LocalTodo[] = []
   let starters: StarterTodo[] = []
@@ -497,23 +498,39 @@
 
     <div class="todo-app">
       <div class="todo-toolbar">
-        <span>{completedCount} of {todos.length} complete</span>
+        <span>{loading ? `0 of ${SKELETON_ROWS} complete` : `${completedCount} of ${todos.length} complete`}</span>
         <div>
-          <button type="button" on:click={resetTodos}>reset</button>
+          <button type="button" on:click={resetTodos} disabled={loading}>reset</button>
         </div>
       </div>
 
       <form class="add-todo" on:submit|preventDefault={addTodo}>
         <label class="sr-only" for="new-todo">New todo</label>
-        <input id="new-todo" bind:value={newTitle} maxlength="200" placeholder="Add a todo..." />
-        <button class="bracket-button" type="submit" disabled={!newTitle.trim() || todos.length >= MAX_TODOS}>[ add ]</button>
+        <input id="new-todo" bind:value={newTitle} maxlength="200" placeholder="Add a todo..." disabled={loading} />
+        <button class="bracket-button" type="submit" disabled={loading || !newTitle.trim() || todos.length >= MAX_TODOS}
+          >[ add ]</button
+        >
       </form>
 
       {#if error}<p class="message error" role="alert">{error}</p>{/if}
       {#if message}<p class="message" aria-live="polite">{message}</p>{/if}
 
       {#if loading}
-        <div class="empty-state"><span class="loader"></span> Loading starter todos…</div>
+        <div class="todo-skeleton" aria-busy="true" aria-label="Loading todos">
+          <span class="sr-only">Loading todos…</span>
+          <ul class="todo-list skeleton-list" aria-hidden="true">
+            {#each Array(SKELETON_ROWS) as _}
+              <li>
+                <span class="skeleton-check"></span>
+                <div class="skeleton-content">
+                  <span class="skeleton-line skeleton-title"></span>
+                  <span class="skeleton-line skeleton-attachment"></span>
+                  <span class="skeleton-line skeleton-actions"></span>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        </div>
       {:else if todos.length === 0}
         <div class="empty-state">Nothing to do. Suspiciously efficient.</div>
       {:else}

@@ -1,4 +1,4 @@
-import { mount } from 'svelte'
+import { hydrate, mount } from 'svelte'
 import './app.css'
 
 if (import.meta.env.DEV) {
@@ -16,4 +16,6 @@ if (import.meta.env.DEV) {
 }
 
 const { default: App } = await import('./App.svelte')
-mount(App, { target: document.getElementById('app')! })
+const target = document.getElementById('app')!
+if (target.hasChildNodes()) hydrate(App, { target })
+else mount(App, { target })

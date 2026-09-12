@@ -364,6 +364,59 @@ input:focus {
   border-bottom: 0;
 }
 
+.skeleton-content {
+  display: grid;
+  min-height: 4.8rem;
+  align-content: start;
+}
+
+.skeleton-check,
+.skeleton-line {
+  display: block;
+  background: var(--line);
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.skeleton-check {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.2rem;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+
+.skeleton-line {
+  height: 0.7rem;
+}
+
+.skeleton-title {
+  width: 78%;
+  height: 1rem;
+  margin-top: 0.25rem;
+}
+
+.skeleton-list > li:nth-child(2) .skeleton-title {
+  width: 64%;
+}
+
+.skeleton-list > li:nth-child(3) .skeleton-title {
+  width: 84%;
+}
+
+.skeleton-list > li:nth-child(4) .skeleton-title {
+  width: 70%;
+}
+
+.skeleton-attachment {
+  width: 11rem;
+  margin-top: 0.65rem;
+}
+
+.skeleton-actions {
+  width: 8.5rem;
+  margin-top: 0.7rem;
+}
+
 .todo-check {
   width: 18px;
   min-height: 18px;
@@ -636,6 +689,16 @@ footer p {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.75;
   }
 }
 
