@@ -41,6 +41,7 @@ The frontend contains only public service URLs. Database, storage, and AI creden
 ## Requirements
 
 - Node.js 20.19 or newer
+- pnpm 10
 - A Neon account and current `neon` CLI
 - A Neon project in `aws-us-east-2` or `aws-eu-central-1`
 - A paid Neon plan for AI Gateway access
@@ -69,7 +70,7 @@ public/config.json           Local frontend runtime defaults
 Install dependencies and sign in:
 
 ```bash
-npm install
+pnpm install
 neon login
 ```
 
@@ -105,9 +106,9 @@ Deployment provisions Neon Auth, the private `attachments` bucket, the `webdevfa
 Run the migration, seed Postgres and Object Storage, then configure storage CORS:
 
 ```bash
-npm run db:migrate
-npm run db:seed
-npm run storage:cors
+pnpm db:migrate
+pnpm db:seed
+pnpm storage:cors
 ```
 
 The seed script is safe to run again. It updates facts by slug and replaces their logo objects.
@@ -132,8 +133,8 @@ neon neon-auth domain allow-localhost enable
 Run the Vite frontend and Neon Function locally in separate terminals:
 
 ```bash
-npm run dev
-npm run neon:dev
+pnpm dev
+pnpm neon:dev
 ```
 
 You can also use the deployed Function while developing the frontend by setting `PUBLIC_API_URL` to its deployed URL.
@@ -141,9 +142,9 @@ You can also use the deployed Function while developing the frontend by setting 
 ## Build the Radius artifact
 
 ```bash
-npm run check
-npm test
-npm run build
+pnpm check
+pnpm test
+pnpm build
 ```
 
 The multi-file artifact is produced in `dist/`. Publish the contents of that directory as one Radius artifact. Keep publishing revisions to the same artifact so its canonical URL remains stable.
@@ -152,7 +153,7 @@ After the first publish:
 
 1. Add the artifact's origin to `APP_ORIGINS` in `.env.local`.
 2. Run `neon deploy --env .env.local --update-existing`.
-3. Run `npm run storage:cors`.
+3. Run `pnpm storage:cors`.
 4. Add the artifact URL to Neon Auth's trusted domains:
 
 ```bash
@@ -201,13 +202,13 @@ This is a temporary demonstration. Do not store sensitive information in it.
 ## Useful commands
 
 ```bash
-npm run check          # Type-check Svelte, scripts, and Function code
-npm test               # Check seed catalog invariants
-npm run build          # Build dist/ and write runtime config
-npm run db:migrate     # Apply SQL migrations
-npm run db:seed        # Seed facts and logo attachments
-npm run storage:cors   # Apply bucket CORS from APP_ORIGINS
-npm run neon:deploy    # Deploy neon.ts using .env.local
+pnpm check          # Type-check Svelte, scripts, and Function code
+pnpm test           # Check seed catalog invariants
+pnpm build          # Build dist/ and write runtime config
+pnpm db:migrate     # Apply SQL migrations
+pnpm db:seed        # Seed facts and logo attachments
+pnpm storage:cors   # Apply bucket CORS from APP_ORIGINS
+pnpm neon:deploy    # Deploy neon.ts using .env.local
 ```
 
 ## Design
