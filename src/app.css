@@ -157,7 +157,6 @@ h2 {
   gap: 1.25rem;
 }
 
-.theme-toggle,
 .text-button,
 .todo-toolbar button:not(.bracket-button),
 .todo-actions button,
@@ -173,15 +172,34 @@ h2 {
   text-underline-offset: 0.2em;
 }
 
-.theme-toggle {
+.theme-picker {
   display: inline-flex;
-  min-height: 40px;
   gap: 0.4rem;
   align-items: center;
-  text-decoration: none;
+  color: var(--muted);
 }
 
-.theme-toggle:hover,
+.theme-picker select {
+  min-height: 40px;
+  padding: 0.45rem 1.8rem 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--copy);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.theme-picker:hover {
+  color: var(--text);
+}
+
+.theme-picker select:hover {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
 .text-button:hover,
 .inline-link:hover,
 .todo-toolbar button:hover,
@@ -612,7 +630,6 @@ footer p {
     padding: 0 1rem;
   }
 
-  .theme-toggle span,
   .header-actions > .bracket-button {
     display: none;
   }

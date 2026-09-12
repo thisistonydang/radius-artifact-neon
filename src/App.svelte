@@ -281,9 +281,7 @@
     }
   }
 
-  function cycleTheme() {
-    const order: ThemeMode[] = ['system', 'light', 'dark']
-    themeMode = order[(order.indexOf(themeMode) + 1) % order.length]
+  function changeTheme() {
     applyTheme(themeMode)
   }
 </script>
@@ -294,7 +292,7 @@
 
 <header class="site-header">
   <div class="header-actions">
-    <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
+    <label class="theme-picker">
       {#if themeMode === 'dark'}
         <Moon size={16} strokeWidth={1.75} />
       {:else if themeMode === 'light'}
@@ -302,8 +300,13 @@
       {:else}
         <Monitor size={16} strokeWidth={1.75} />
       {/if}
-      <span>{themeMode}</span>
-    </button>
+      <span class="sr-only">Theme</span>
+      <select bind:value={themeMode} on:change={changeTheme} aria-label="Theme">
+        <option value="system">system</option>
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+      </select>
+    </label>
     {#if user}
       <button class="bracket-button" type="button" on:click={signOut}>[ sign out ]</button>
     {:else}
