@@ -1,5 +1,5 @@
 import { getAuthToken } from './auth'
-import type { Fact, Note } from './types'
+import type { CloudTodo, LocalTodo, StarterTodo } from './types'
 
 const baseUrl = (window.APP_CONFIG?.apiUrl ?? 'http://localhost:8787').replace(/\/$/, '')
 
@@ -28,32 +28,28 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
 }
 
 export const api = {
-  facts: () => request<{ facts: Fact[] }>('/api/facts'),
-  publicChat: (question: string) =>
-    request<{ answer: string }>('/api/chat/public', { method: 'POST', body: JSON.stringify({ question }) }),
-  notes: () => request<{ notes: Note[] }>('/api/me/notes', {}, true),
-  createNote: (title: string, body: string) =>
-    request<{ note: Note }>(
-      '/api/me/notes',
-      { method: 'POST', body: JSON.stringify({ title, body }) },
+  starterTodos: () => request<{ todos: StarterTodo[] }>('/api/starter-todos'),
+  chat: (question: string, todos: LocalTodo[]) =>
+    request<{ answer: string }>('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        todos: todos.map(({ title, completed }) => ({ title, completed })),
+      }),
+    }),
+  cloudTodos: () => request<{ todos: CloudTodo[] }>('/api/me/todos', {}, true),
+  saveTodos: (todos: LocalTodo[]) =>
+    request<{ todos: CloudTodo[] }>(
+      '/api/me/todos',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ todos: todos.map(({ clientId, title, completed }) => ({ clientId, title, completed })) }),
+      },
       true,
     ),
-  updateNote: (id: string, title: string, body: string) =>
-    request<{ note: Note }>(
-      `/api/me/notes/${id}`,
-      { method: 'PUT', body: JSON.stringify({ title, body }) },
-      true,
-    ),
-  deleteNote: (id: string) => request<{ ok: true }>(`/api/me/notes/${id}`, { method: 'DELETE' }, true),
-  privateChat: (question: string) =>
-    request<{ answer: string }>(
-      '/api/me/chat',
-      { method: 'POST', body: JSON.stringify({ question }) },
-      true,
-    ),
-  async uploadAttachment(noteId: string, file: File) {
+  async uploadAttachment(todoId: string, file: File) {
     const upload = await request<{ uploadUrl: string; storageKey: string; fileName: string }>(
-      `/api/me/notes/${noteId}/attachments/presign`,
+      `/api/me/todos/${todoId}/attachments/presign`,
       {
         method: 'POST',
         body: JSON.stringify({ fileName: file.name, contentType: file.type, byteSize: file.size }),
@@ -67,7 +63,7 @@ export const api = {
     })
     if (!uploaded.ok) throw new ApiError('The file upload failed.', uploaded.status)
     return request(
-      `/api/me/notes/${noteId}/attachments/complete`,
+      `/api/me/todos/${todoId}/attachments/complete`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -80,8 +76,7 @@ export const api = {
       true,
     )
   },
-  attachmentUrl: (id: string) =>
-    request<{ url: string }>(`/api/me/attachments/${id}/url`, {}, true),
+  attachmentUrl: (id: string) => request<{ url: string }>(`/api/me/attachments/${id}/url`, {}, true),
   deleteAttachment: (id: string) =>
     request<{ ok: true }>(`/api/me/attachments/${id}`, { method: 'DELETE' }, true),
 }

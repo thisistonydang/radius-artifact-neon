@@ -1,48 +1,34 @@
 <script lang="ts">
   import { api } from './api'
+  import type { LocalTodo } from './types'
 
-  export let mode: 'public' | 'private' = 'public'
+  export let todos: LocalTodo[] = []
 
   let question = ''
   let answer = ''
   let error = ''
   let loading = false
 
-  $: examples =
-    mode === 'public'
-      ? ['Which tools use Python?', 'How are React and Svelte different?', 'Which platforms can host a web app?']
-      : ['Summarize my notes.', 'What tasks did I write down?', 'Which ideas appear more than once?']
+  const examples = ['What should I do first?', 'Which item is already done?', 'Do I need more snacks?']
 
   async function ask() {
-    if (!question.trim() || loading) return
+    if (!question.trim() || loading || todos.length === 0) return
     loading = true
     error = ''
     answer = ''
     try {
-      const result = mode === 'public' ? await api.publicChat(question) : await api.privateChat(question)
-      answer = result.answer
+      answer = (await api.chat(question, todos)).answer
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'The agent could not answer.'
+      error = caught instanceof Error ? caught.message : 'The assistant could not answer.'
     } finally {
       loading = false
     }
   }
 </script>
 
-<section class="chat-panel" aria-labelledby={`${mode}-chat-title`}>
-  <div class="panel-heading">
-    <div>
-      <p class="eyebrow">NEON FUNCTION + AI GATEWAY</p>
-      <h2 id={`${mode}-chat-title`}>{mode === 'public' ? 'Ask the facts' : 'Ask my notes'}</h2>
-    </div>
-    <span class="status"><i></i> connected</span>
-  </div>
-
-  <p class="panel-copy">
-    {mode === 'public'
-      ? 'The agent answers from the public facts stored in Lakebase Postgres.'
-      : 'The agent can read only the notes connected to your Neon Auth identity.'}
-  </p>
+<section class="chat-panel" aria-labelledby="chat-title">
+  <h2 id="chat-title">Ask your todos</h2>
+  <p>The current list is sent to Neon AI Gateway when you ask a question. It is not saved.</p>
 
   <div class="prompt-list" aria-label="Example questions">
     {#each examples as example}
@@ -51,26 +37,17 @@
   </div>
 
   <form on:submit|preventDefault={ask}>
-    <label for={`${mode}-question`}>YOUR QUESTION</label>
-    <textarea
-      id={`${mode}-question`}
-      bind:value={question}
-      maxlength="500"
-      rows="3"
-      placeholder="Ask something about these notes..."
-    ></textarea>
-    <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2}>
-      {loading ? '[ thinking… ]' : '[ ask ]'}
-    </button>
+    <label for="todo-question">QUESTION</label>
+    <div class="question-row">
+      <input id="todo-question" bind:value={question} maxlength="500" placeholder="Ask about this list..." />
+      <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
+        {loading ? '[ thinking… ]' : '[ ask ]'}
+      </button>
+    </div>
   </form>
 
   {#if answer}
-    <div class="agent-answer" aria-live="polite">
-      <p class="eyebrow">MISSION ARCHIVIST</p>
-      <p>{answer}</p>
-    </div>
+    <div class="agent-answer" aria-live="polite"><p>{answer}</p></div>
   {/if}
-  {#if error}
-    <p class="message error" role="alert">{error}</p>
-  {/if}
+  {#if error}<p class="message error" role="alert">{error}</p>{/if}
 </section>

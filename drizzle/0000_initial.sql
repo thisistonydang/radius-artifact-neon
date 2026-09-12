@@ -1,21 +1,19 @@
-CREATE TABLE "facts" (
+CREATE TABLE "starter_todos" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "slug" text NOT NULL,
-  "name" text NOT NULL,
-  "category" text NOT NULL,
-  "summary" text NOT NULL,
-  "fun_fact" text NOT NULL,
-  "source_url" text NOT NULL,
+  "title" text NOT NULL,
+  "completed" boolean DEFAULT false NOT NULL,
+  "position" integer NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL
 );
 
-CREATE UNIQUE INDEX "facts_slug_idx" ON "facts" ("slug");
-CREATE INDEX "facts_category_idx" ON "facts" ("category");
+CREATE UNIQUE INDEX "starter_todos_slug_idx" ON "starter_todos" ("slug");
+CREATE INDEX "starter_todos_position_idx" ON "starter_todos" ("position");
 
-CREATE TABLE "fact_assets" (
+CREATE TABLE "starter_attachments" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "fact_id" uuid NOT NULL REFERENCES "facts"("id") ON DELETE CASCADE,
+  "starter_todo_id" uuid NOT NULL REFERENCES "starter_todos"("id") ON DELETE CASCADE,
   "storage_key" text NOT NULL,
   "file_name" text NOT NULL,
   "content_type" text NOT NULL,
@@ -23,22 +21,25 @@ CREATE TABLE "fact_assets" (
   "created_at" timestamptz DEFAULT now() NOT NULL
 );
 
-CREATE UNIQUE INDEX "fact_assets_fact_id_idx" ON "fact_assets" ("fact_id");
+CREATE UNIQUE INDEX "starter_attachments_todo_idx" ON "starter_attachments" ("starter_todo_id");
 
-CREATE TABLE "notes" (
+CREATE TABLE "todos" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "user_id" text NOT NULL,
+  "client_id" uuid NOT NULL,
   "title" text NOT NULL,
-  "body" text NOT NULL,
+  "completed" boolean DEFAULT false NOT NULL,
+  "position" integer NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL
 );
 
-CREATE INDEX "notes_user_updated_idx" ON "notes" ("user_id", "updated_at");
+CREATE UNIQUE INDEX "todos_user_client_idx" ON "todos" ("user_id", "client_id");
+CREATE INDEX "todos_user_position_idx" ON "todos" ("user_id", "position");
 
 CREATE TABLE "attachments" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "note_id" uuid NOT NULL REFERENCES "notes"("id") ON DELETE CASCADE,
+  "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE CASCADE,
   "user_id" text NOT NULL,
   "storage_key" text NOT NULL,
   "file_name" text NOT NULL,
@@ -48,5 +49,5 @@ CREATE TABLE "attachments" (
 );
 
 CREATE UNIQUE INDEX "attachments_storage_key_idx" ON "attachments" ("storage_key");
-CREATE INDEX "attachments_note_idx" ON "attachments" ("note_id");
+CREATE INDEX "attachments_todo_idx" ON "attachments" ("todo_id");
 CREATE INDEX "attachments_user_idx" ON "attachments" ("user_id");

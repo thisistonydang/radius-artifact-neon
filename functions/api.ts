@@ -9,7 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { neon as neonModel } from '@neon/ai-sdk-provider'
 import { attachDatabasePool } from '@neon/functions'
 import { generateText } from 'ai'
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, notInArray } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Hono } from 'hono'
 import type { Context, Next } from 'hono'
@@ -17,8 +17,9 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { Pool } from 'pg'
 import { z } from 'zod'
 import { normalizePostgresUrl } from '../src/db/connection.js'
-import { attachments, factAssets, facts, notes } from '../src/db/schema.js'
+import { attachments, starterAttachments, starterTodos, todos } from '../src/db/schema.js'
 
+const MAX_TODOS = 10
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 3
 const BUCKET = 'attachments'
@@ -60,9 +61,7 @@ function corsHeaders(origin: string | undefined): Record<string, string> {
 
 app.use('*', async (c, next) => {
   const origin = c.req.header('origin')
-  if (c.req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) })
-  }
+  if (c.req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(origin) })
   await next()
   for (const [name, value] of Object.entries(corsHeaders(origin))) c.header(name, value)
 })
@@ -73,11 +72,7 @@ app.onError((error, c) => {
 })
 
 app.get('/health', (c) =>
-  c.json({
-    ok: true,
-    service: 'web dev fun facts API',
-    branch: process.env.NEON_BRANCH ?? 'local',
-  }),
+  c.json({ ok: true, service: 'simple todos API', branch: process.env.NEON_BRANCH ?? 'local' }),
 )
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
@@ -112,127 +107,125 @@ async function signedDownloadUrl(storageKey: string) {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: storageKey }), { expiresIn: 3600 })
 }
 
-app.get('/api/facts', async (c) => {
+app.get('/api/starter-todos', async (c) => {
   const rows = await db
-    .select({ fact: facts, asset: factAssets })
-    .from(facts)
-    .leftJoin(factAssets, eq(facts.id, factAssets.factId))
-    .orderBy(asc(facts.category), asc(facts.name))
+    .select({ todo: starterTodos, attachment: starterAttachments })
+    .from(starterTodos)
+    .leftJoin(starterAttachments, eq(starterTodos.id, starterAttachments.starterTodoId))
+    .orderBy(asc(starterTodos.position))
 
   const data = await Promise.all(
-    rows.map(async ({ fact, asset }) => ({
-      ...fact,
-      logoUrl: asset ? await signedDownloadUrl(asset.storageKey) : null,
-      attachmentName: asset?.fileName ?? null,
+    rows.map(async ({ todo, attachment }) => ({
+      id: todo.id,
+      slug: todo.slug,
+      title: todo.title,
+      completed: todo.completed,
+      position: todo.position,
+      attachment: attachment
+        ? {
+            id: attachment.id,
+            fileName: attachment.fileName,
+            url: await signedDownloadUrl(attachment.storageKey),
+          }
+        : null,
     })),
   )
-
-  return c.json({ facts: data })
+  return c.json({ todos: data })
 })
 
-const questionInput = z.object({ question: z.string().trim().min(2).max(500) })
+const todoForChat = z.object({ title: z.string().trim().min(1).max(200), completed: z.boolean() })
+const chatInput = z.object({
+  question: z.string().trim().min(2).max(500),
+  todos: z.array(todoForChat).max(MAX_TODOS),
+})
 
-async function answerQuestion(question: string, context: string, scope: string) {
-  const model = process.env.AI_MODEL ?? 'gpt-5-mini'
-  const result = await generateText({
-    model: neonModel(model),
-    system: [
-      `You are the concise archivist for ${scope}.`,
-      'Answer only from the supplied notes.',
-      'If the notes do not answer the question, say so plainly.',
-      'Mention note titles in square brackets when using them as evidence.',
-      'Keep the answer under 180 words.',
-    ].join(' '),
-    prompt: `NOTES\n${context}\n\nQUESTION\n${question}`,
-    maxOutputTokens: 500,
-  })
-  return result.text
-}
-
-app.post('/api/chat/public', async (c) => {
+app.post('/api/chat', async (c) => {
   if (process.env.PUBLIC_CHAT_ENABLED === 'false') {
-    return c.json({ error: 'Public chat is temporarily disabled.' }, 503)
+    return c.json({ error: 'Todo chat is temporarily disabled.' }, 503)
   }
-  const parsed = questionInput.safeParse(await c.req.json().catch(() => null))
-  if (!parsed.success) return c.json({ error: 'Enter a question between 2 and 500 characters.' }, 400)
+  const parsed = chatInput.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Send a short question and no more than 10 todos.' }, 400)
+  if (parsed.data.todos.length === 0) return c.json({ error: 'Add a todo before asking a question.' }, 400)
 
-  const rows = await db.select().from(facts).orderBy(asc(facts.name))
-  const context = rows
-    .map((fact) => `[${fact.name}]\nCategory: ${fact.category}\n${fact.summary}\nFun fact: ${fact.funFact}`)
-    .join('\n\n')
-  const answer = await answerQuestion(parsed.data.question, context, 'the public web dev fun facts')
-  return c.json({ answer })
+  const context = parsed.data.todos
+    .map((todo, index) => `${index + 1}. [${todo.completed ? 'done' : 'open'}] ${todo.title}`)
+    .join('\n')
+  const result = await generateText({
+    model: neonModel(process.env.AI_MODEL ?? 'gpt-5-mini'),
+    system:
+      'You are a concise, friendly todo assistant. Answer only from the supplied todo list. If the list does not answer the question, say so plainly. Keep the answer under 120 words.',
+    prompt: `TODO LIST\n${context}\n\nQUESTION\n${parsed.data.question}`,
+    maxOutputTokens: 350,
+  })
+  return c.json({ answer: result.text })
 })
 
-const noteInput = z.object({
-  title: z.string().trim().min(1).max(120),
-  body: z.string().trim().min(1).max(5000),
+const cloudTodoInput = z.object({
+  clientId: z.string().uuid(),
+  title: z.string().trim().min(1).max(200),
+  completed: z.boolean(),
 })
+const workspaceInput = z.object({ todos: z.array(cloudTodoInput).max(MAX_TODOS) })
 
-async function listNotes(userId: string) {
-  const noteRows = await db
-    .select()
-    .from(notes)
-    .where(eq(notes.userId, userId))
-    .orderBy(desc(notes.updatedAt))
-  if (noteRows.length === 0) return []
-
+async function listCloudTodos(userId: string) {
+  const todoRows = await db.select().from(todos).where(eq(todos.userId, userId)).orderBy(asc(todos.position))
+  if (todoRows.length === 0) return []
   const attachmentRows = await db
     .select()
     .from(attachments)
-    .where(and(eq(attachments.userId, userId), inArray(attachments.noteId, noteRows.map((note) => note.id))))
+    .where(and(eq(attachments.userId, userId), inArray(attachments.todoId, todoRows.map((todo) => todo.id))))
     .orderBy(asc(attachments.createdAt))
 
-  return noteRows.map((note) => ({
-    ...note,
-    attachments: attachmentRows.filter((attachment) => attachment.noteId === note.id),
+  return todoRows.map((todo) => ({
+    id: todo.id,
+    clientId: todo.clientId,
+    title: todo.title,
+    completed: todo.completed,
+    position: todo.position,
+    updatedAt: todo.updatedAt,
+    attachments: attachmentRows.filter((attachment) => attachment.todoId === todo.id),
   }))
 }
 
-app.get('/api/me/notes', async (c) => c.json({ notes: await listNotes(c.get('userId')) }))
+app.get('/api/me/todos', async (c) => c.json({ todos: await listCloudTodos(c.get('userId')) }))
 
-app.post('/api/me/notes', async (c) => {
-  const parsed = noteInput.safeParse(await c.req.json().catch(() => null))
-  if (!parsed.success) return c.json({ error: 'A title and note text are required.' }, 400)
+app.put('/api/me/todos', async (c) => {
+  const parsed = workspaceInput.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Save no more than 10 todos with short titles.' }, 400)
 
   const userId = c.get('userId')
-  const existing = await db.select({ id: notes.id }).from(notes).where(eq(notes.userId, userId)).limit(51)
-  if (existing.length >= 50) return c.json({ error: 'This demo allows up to 50 notes per user.' }, 400)
+  const clientIds = parsed.data.todos.map((todo) => todo.clientId)
+  const existingTodos = await db.select().from(todos).where(eq(todos.userId, userId))
+  const removed = existingTodos.filter((todo) => !clientIds.includes(todo.clientId))
+  const removedFiles = removed.length
+    ? await db
+        .select({ storageKey: attachments.storageKey })
+        .from(attachments)
+        .where(and(eq(attachments.userId, userId), inArray(attachments.todoId, removed.map((todo) => todo.id))))
+    : []
 
-  const [note] = await db.insert(notes).values({ userId, ...parsed.data }).returning()
-  return c.json({ note: { ...note, attachments: [] } }, 201)
-})
+  await db.transaction(async (tx) => {
+    if (clientIds.length) {
+      await tx.delete(todos).where(and(eq(todos.userId, userId), notInArray(todos.clientId, clientIds)))
+    } else {
+      await tx.delete(todos).where(eq(todos.userId, userId))
+    }
 
-app.put('/api/me/notes/:id', async (c) => {
-  const parsed = noteInput.safeParse(await c.req.json().catch(() => null))
-  if (!parsed.success) return c.json({ error: 'A title and note text are required.' }, 400)
-
-  const [note] = await db
-    .update(notes)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(and(eq(notes.id, c.req.param('id')), eq(notes.userId, c.get('userId'))))
-    .returning()
-  if (!note) return c.json({ error: 'Note not found.' }, 404)
-  return c.json({ note })
-})
-
-app.delete('/api/me/notes/:id', async (c) => {
-  const userId = c.get('userId')
-  const id = c.req.param('id')
-  const files = await db
-    .select({ storageKey: attachments.storageKey })
-    .from(attachments)
-    .where(and(eq(attachments.noteId, id), eq(attachments.userId, userId)))
-  const [deleted] = await db
-    .delete(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-    .returning({ id: notes.id })
-  if (!deleted) return c.json({ error: 'Note not found.' }, 404)
+    for (const [position, todo] of parsed.data.todos.entries()) {
+      await tx
+        .insert(todos)
+        .values({ userId, clientId: todo.clientId, title: todo.title, completed: todo.completed, position })
+        .onConflictDoUpdate({
+          target: [todos.userId, todos.clientId],
+          set: { title: todo.title, completed: todo.completed, position, updatedAt: new Date() },
+        })
+    }
+  })
 
   await Promise.allSettled(
-    files.map(({ storageKey }) => s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: storageKey }))),
+    removedFiles.map(({ storageKey }) => s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: storageKey }))),
   )
-  return c.json({ ok: true })
+  return c.json({ todos: await listCloudTodos(userId) })
 })
 
 const uploadInput = z.object({
@@ -241,31 +234,31 @@ const uploadInput = z.object({
   byteSize: z.number().int().positive().max(MAX_FILE_BYTES),
 })
 
-app.post('/api/me/notes/:id/attachments/presign', async (c) => {
+app.post('/api/me/todos/:id/attachments/presign', async (c) => {
   const parsed = uploadInput.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success || !ALLOWED_FILE_TYPES.has(parsed.data?.contentType ?? '')) {
     return c.json({ error: 'Use a PNG, JPEG, PDF, Markdown, or text file up to 5 MB.' }, 400)
   }
 
   const userId = c.get('userId')
-  const noteId = c.req.param('id')
-  const [note] = await db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+  const todoId = c.req.param('id')
+  const [todo] = await db
+    .select({ id: todos.id })
+    .from(todos)
+    .where(and(eq(todos.id, todoId), eq(todos.userId, userId)))
     .limit(1)
-  if (!note) return c.json({ error: 'Note not found.' }, 404)
+  if (!todo) return c.json({ error: 'Save this todo online before attaching a file.' }, 404)
 
   const existing = await db
     .select({ id: attachments.id })
     .from(attachments)
-    .where(and(eq(attachments.noteId, noteId), eq(attachments.userId, userId)))
+    .where(and(eq(attachments.todoId, todoId), eq(attachments.userId, userId)))
   if (existing.length >= MAX_ATTACHMENTS) {
-    return c.json({ error: `A note can have up to ${MAX_ATTACHMENTS} attachments.` }, 400)
+    return c.json({ error: `A todo can have up to ${MAX_ATTACHMENTS} attachments.` }, 400)
   }
 
   const fileName = safeFileName(parsed.data.fileName)
-  const storageKey = `users/${userId}/${noteId}/${crypto.randomUUID()}-${fileName}`
+  const storageKey = `users/${userId}/${todoId}/${crypto.randomUUID()}-${fileName}`
   const uploadUrl = await getSignedUrl(
     s3,
     new PutObjectCommand({
@@ -276,29 +269,29 @@ app.post('/api/me/notes/:id/attachments/presign', async (c) => {
     }),
     { expiresIn: 300 },
   )
-
   return c.json({ uploadUrl, storageKey, fileName, expiresIn: 300 })
 })
 
 const completeUploadInput = uploadInput.extend({ storageKey: z.string().min(1).max(500) })
 
-app.post('/api/me/notes/:id/attachments/complete', async (c) => {
+app.post('/api/me/todos/:id/attachments/complete', async (c) => {
   const parsed = completeUploadInput.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success || !ALLOWED_FILE_TYPES.has(parsed.data?.contentType ?? '')) {
     return c.json({ error: 'Invalid attachment information.' }, 400)
   }
 
   const userId = c.get('userId')
-  const noteId = c.req.param('id')
-  const expectedPrefix = `users/${userId}/${noteId}/`
-  if (!parsed.data.storageKey.startsWith(expectedPrefix)) return c.json({ error: 'Invalid storage key.' }, 400)
+  const todoId = c.req.param('id')
+  if (!parsed.data.storageKey.startsWith(`users/${userId}/${todoId}/`)) {
+    return c.json({ error: 'Invalid storage key.' }, 400)
+  }
 
-  const [note] = await db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+  const [todo] = await db
+    .select({ id: todos.id })
+    .from(todos)
+    .where(and(eq(todos.id, todoId), eq(todos.userId, userId)))
     .limit(1)
-  if (!note) return c.json({ error: 'Note not found.' }, 404)
+  if (!todo) return c.json({ error: 'Todo not found.' }, 404)
 
   const stored = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: parsed.data.storageKey }))
   const storedBytes = stored.ContentLength ?? 0
@@ -307,7 +300,7 @@ app.post('/api/me/notes/:id/attachments/complete', async (c) => {
   const [attachment] = await db
     .insert(attachments)
     .values({
-      noteId,
+      todoId,
       userId,
       storageKey: parsed.data.storageKey,
       fileName: safeFileName(parsed.data.fileName),
@@ -336,23 +329,6 @@ app.delete('/api/me/attachments/:id', async (c) => {
   if (!attachment) return c.json({ error: 'Attachment not found.' }, 404)
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: attachment.storageKey }))
   return c.json({ ok: true })
-})
-
-app.post('/api/me/chat', async (c) => {
-  const parsed = questionInput.safeParse(await c.req.json().catch(() => null))
-  if (!parsed.success) return c.json({ error: 'Enter a question between 2 and 500 characters.' }, 400)
-
-  const rows = await db
-    .select({ title: notes.title, body: notes.body })
-    .from(notes)
-    .where(eq(notes.userId, c.get('userId')))
-    .orderBy(desc(notes.updatedAt))
-    .limit(50)
-  if (rows.length === 0) return c.json({ error: 'Create a note before asking about your notes.' }, 400)
-
-  const context = rows.map((note) => `[${note.title}]\n${note.body}`).join('\n\n')
-  const answer = await answerQuestion(parsed.data.question, context, 'the signed-in user’s private notes')
-  return c.json({ answer })
 })
 
 export default app

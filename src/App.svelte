@@ -1,64 +1,103 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
-  import FactCard from './lib/FactCard.svelte'
   import { api } from './lib/api'
   import { authClient } from './lib/auth'
+  import { fromStarters, loadLocalTodos, saveLocalTodos } from './lib/local-todos'
   import { applyTheme, type ThemeMode } from './lib/theme'
-  import type { AuthUser, Fact, Note } from './lib/types'
+  import type { AuthUser, CloudTodo, LocalTodo, StarterAttachment, StarterTodo } from './lib/types'
 
-  let facts: Fact[] = []
-  let factsLoading = true
-  let factsError = ''
-  let search = ''
-  let category = 'all'
-  let workspace: 'public' | 'private' = 'public'
+  const MAX_TODOS = 10
+
+  let todos: LocalTodo[] = []
+  let starters: StarterTodo[] = []
+  let cloudTodos: CloudTodo[] = []
+  let loading = true
+  let error = ''
+  let message = ''
+  let newTitle = ''
+  let editingId: string | null = null
+  let editTitle = ''
+  let cloudDirty = true
+  let saving = false
+  let fileBusy = ''
+
   let themeMode: ThemeMode = 'system'
-
   let authLoading = true
+  let authOpen = false
   let authMode: 'signin' | 'signup' = 'signin'
+  let authReason = 'Sign in to save your todos across devices.'
   let authError = ''
   let authBusy = false
+  let pendingAction: 'signin' | 'save' | 'attach' | null = null
   let email = ''
   let password = ''
   let user: AuthUser | null = null
 
-  let notes: Note[] = []
-  let notesLoading = false
-  let noteError = ''
-  let selectedNoteId: string | null = null
-  let noteTitle = ''
-  let noteBody = ''
-  let noteBusy = false
-  let fileBusy = ''
-
-  $: categories = ['all', ...new Set(facts.map((fact) => fact.category))]
-  $: filteredFacts = facts.filter((fact) => {
-    const matchesCategory = category === 'all' || fact.category === category
-    const query = search.trim().toLowerCase()
-    const matchesSearch =
-      !query ||
-      [fact.name, fact.category, fact.summary, fact.funFact].some((value) =>
-        value.toLowerCase().includes(query),
-      )
-    return matchesCategory && matchesSearch
-  })
+  $: cloudByClientId = new Map(cloudTodos.map((todo) => [todo.clientId, todo]))
+  $: completedCount = todos.filter((todo) => todo.completed).length
 
   onMount(async () => {
     themeMode = (localStorage.getItem('theme') as ThemeMode | null) ?? 'system'
-    await Promise.all([loadFacts(), refreshSession()])
+    const local = loadLocalTodos(localStorage)
+    if (local) todos = local
+    await Promise.all([loadStarters(local), refreshSession()])
+    loading = false
   })
 
-  async function loadFacts() {
-    factsLoading = true
-    factsError = ''
+  async function loadStarters(local: LocalTodo[] | null) {
     try {
-      facts = (await api.facts()).facts
+      starters = (await api.starterTodos()).todos
+      if (!local) updateTodos(fromStarters(starters), false)
     } catch (caught) {
-      factsError = caught instanceof Error ? caught.message : 'Could not load the public facts.'
-    } finally {
-      factsLoading = false
+      if (!local) error = caught instanceof Error ? caught.message : 'Could not load the starter list.'
     }
+  }
+
+  function updateTodos(next: LocalTodo[], dirty = true) {
+    todos = next.slice(0, MAX_TODOS)
+    saveLocalTodos(localStorage, todos)
+    if (dirty) cloudDirty = true
+    message = ''
+  }
+
+  function addTodo() {
+    const title = newTitle.trim()
+    if (!title || todos.length >= MAX_TODOS) return
+    updateTodos([...todos, { clientId: crypto.randomUUID(), title, completed: false }])
+    newTitle = ''
+  }
+
+  function toggleTodo(clientId: string) {
+    updateTodos(todos.map((todo) => (todo.clientId === clientId ? { ...todo, completed: !todo.completed } : todo)))
+  }
+
+  function startEditing(todo: LocalTodo) {
+    editingId = todo.clientId
+    editTitle = todo.title
+  }
+
+  function finishEditing() {
+    const title = editTitle.trim()
+    if (editingId && title) {
+      updateTodos(todos.map((todo) => (todo.clientId === editingId ? { ...todo, title } : todo)))
+    }
+    editingId = null
+    editTitle = ''
+  }
+
+  function removeTodo(clientId: string) {
+    updateTodos(todos.filter((todo) => todo.clientId !== clientId))
+  }
+
+  function resetTodos() {
+    if (!confirm('Reset this device to the four starter todos?')) return
+    updateTodos(fromStarters(starters))
+  }
+
+  function starterAttachment(todo: LocalTodo): StarterAttachment | null {
+    if (!todo.starterSlug) return null
+    return starters.find((starter) => starter.slug === todo.starterSlug)?.attachment ?? null
   }
 
   async function refreshSession() {
@@ -70,10 +109,8 @@
     try {
       const result = await authClient.getSession()
       const sessionUser = result.data?.user
-      user = sessionUser
-        ? { id: sessionUser.id, email: sessionUser.email, name: sessionUser.name }
-        : null
-      if (user) await loadNotes()
+      user = sessionUser ? { id: sessionUser.id, email: sessionUser.email, name: sessionUser.name } : null
+      if (user) await loadCloudTodos()
     } catch {
       user = null
     } finally {
@@ -81,10 +118,24 @@
     }
   }
 
-  function cycleTheme() {
-    const order: ThemeMode[] = ['system', 'light', 'dark']
-    themeMode = order[(order.indexOf(themeMode) + 1) % order.length]
-    applyTheme(themeMode)
+  async function loadCloudTodos() {
+    try {
+      cloudTodos = (await api.cloudTodos()).todos
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : 'Could not load your saved todos.'
+    }
+  }
+
+  function requestAuth(action: 'signin' | 'save' | 'attach') {
+    pendingAction = action
+    authReason =
+      action === 'attach'
+        ? 'Sign in to save this todo and attach a file.'
+        : action === 'save'
+          ? 'Sign in to save your todos across devices.'
+          : 'Sign in to load or save your todos across devices.'
+    authOpen = true
+    authError = ''
   }
 
   async function submitAuth() {
@@ -94,15 +145,18 @@
     try {
       const result =
         authMode === 'signup'
-          ? await authClient.signUp.email({
-              name: email.split('@')[0] || 'Web developer',
-              email,
-              password,
-            })
+          ? await authClient.signUp.email({ name: email.split('@')[0] || 'Todo maker', email, password })
           : await authClient.signIn.email({ email, password })
       if (result.error) throw new Error(result.error.message ?? 'Authentication failed.')
       await refreshSession()
+      authOpen = false
       password = ''
+      if (pendingAction === 'save' || pendingAction === 'attach') await saveOnline()
+      if (pendingAction === 'attach') message = 'Your list is saved. Select “attach file” again to choose a file.'
+      if (pendingAction === 'signin') {
+        message = cloudTodos.length ? 'Signed in. Load your online list or save this device’s list.' : 'Signed in. Save this list when you are ready.'
+      }
+      pendingAction = null
     } catch (caught) {
       authError = caught instanceof Error ? caught.message : 'Authentication failed.'
     } finally {
@@ -114,60 +168,43 @@
     if (!authClient) return
     await authClient.signOut()
     user = null
-    notes = []
-    resetEditor()
+    cloudTodos = []
+    cloudDirty = true
+    message = 'Signed out. Your local list is still on this device.'
   }
 
-  async function loadNotes() {
-    notesLoading = true
-    noteError = ''
+  async function saveOnline() {
+    if (!user) {
+      requestAuth('save')
+      return
+    }
+    saving = true
+    error = ''
     try {
-      notes = (await api.notes()).notes
+      cloudTodos = (await api.saveTodos(todos)).todos
+      cloudDirty = false
+      message = 'Saved online with Neon Postgres.'
     } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not load your notes.'
+      error = caught instanceof Error ? caught.message : 'Could not save your todos online.'
     } finally {
-      notesLoading = false
+      saving = false
     }
   }
 
-  function editNote(note: Note) {
-    selectedNoteId = note.id
-    noteTitle = note.title
-    noteBody = note.body
-    document.getElementById('note-editor')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
-  function resetEditor() {
-    selectedNoteId = null
-    noteTitle = ''
-    noteBody = ''
-  }
-
-  async function saveNote() {
-    if (noteBusy) return
-    noteBusy = true
-    noteError = ''
-    try {
-      if (selectedNoteId) await api.updateNote(selectedNoteId, noteTitle, noteBody)
-      else await api.createNote(noteTitle, noteBody)
-      resetEditor()
-      await loadNotes()
-    } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not save the note.'
-    } finally {
-      noteBusy = false
+  async function loadOnline() {
+    if (!user) return
+    await loadCloudTodos()
+    if (!cloudTodos.length) {
+      message = 'There is no online list yet. Save this list first.'
+      return
     }
-  }
-
-  async function removeNote(note: Note) {
-    if (!confirm(`Delete “${note.title}” and its attachments?`)) return
-    try {
-      await api.deleteNote(note.id)
-      if (selectedNoteId === note.id) resetEditor()
-      await loadNotes()
-    } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not delete the note.'
-    }
+    if (cloudDirty && !confirm('Replace the list on this device with your online list?')) return
+    updateTodos(
+      cloudTodos.map((todo) => ({ clientId: todo.clientId, title: todo.title, completed: todo.completed })),
+      false,
+    )
+    cloudDirty = false
+    message = 'Loaded your online list.'
   }
 
   function normalizedFile(file: File) {
@@ -177,18 +214,33 @@
     return contentType ? new File([file], file.name, { type: contentType }) : file
   }
 
-  async function uploadFile(note: Note, event: Event) {
+  async function beginAttachment(todo: LocalTodo) {
+    if (!user) {
+      requestAuth('attach')
+      return
+    }
+    if (!cloudByClientId.has(todo.clientId) || cloudDirty) {
+      await saveOnline()
+      message = 'Your list is saved. Select “attach file” again to choose a file.'
+      return
+    }
+    document.getElementById(`file-${todo.clientId}`)?.click()
+  }
+
+  async function uploadFile(todo: LocalTodo, event: Event) {
     const input = event.currentTarget as HTMLInputElement
     const original = input.files?.[0]
-    if (!original) return
+    const cloudTodo = cloudByClientId.get(todo.clientId)
+    if (!original || !cloudTodo) return
     const file = normalizedFile(original)
-    fileBusy = note.id
-    noteError = ''
+    fileBusy = todo.clientId
+    error = ''
     try {
-      await api.uploadAttachment(note.id, file)
-      await loadNotes()
+      await api.uploadAttachment(cloudTodo.id, file)
+      await loadCloudTodos()
+      message = 'Attachment saved in Neon Object Storage.'
     } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not upload the attachment.'
+      error = caught instanceof Error ? caught.message : 'Could not upload the attachment.'
     } finally {
       fileBusy = ''
       input.value = ''
@@ -198,13 +250,9 @@
   async function openAttachment(id: string) {
     try {
       const { url } = await api.attachmentUrl(id)
-      const link = document.createElement('a')
-      link.href = url
-      link.target = '_blank'
-      link.rel = 'noreferrer'
-      link.click()
+      window.open(url, '_blank', 'noopener,noreferrer')
     } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not open the attachment.'
+      error = caught instanceof Error ? caught.message : 'Could not open the attachment.'
     }
   }
 
@@ -212,262 +260,199 @@
     if (!confirm('Delete this attachment?')) return
     try {
       await api.deleteAttachment(id)
-      await loadNotes()
+      await loadCloudTodos()
+      message = 'Attachment deleted.'
     } catch (caught) {
-      noteError = caught instanceof Error ? caught.message : 'Could not delete the attachment.'
+      error = caught instanceof Error ? caught.message : 'Could not delete the attachment.'
     }
+  }
+
+  function cycleTheme() {
+    const order: ThemeMode[] = ['system', 'light', 'dark']
+    themeMode = order[(order.indexOf(themeMode) + 1) % order.length]
+    applyTheme(themeMode)
   }
 </script>
 
 <svelte:head>
-  <title>web dev fun facts · Radius + Neon</title>
+  <title>A simple todo list · Radius + Neon</title>
 </svelte:head>
 
 <header class="site-header">
-  <a class="brand" href="#top" aria-label="web dev fun facts home">
-    <span class="brand-mark">π</span>
-    <span>web dev fun facts</span>
-  </a>
-  <nav aria-label="Primary navigation">
-    <button class:active={workspace === 'public'} type="button" on:click={() => (workspace = 'public')}>
-      public facts
-    </button>
-    <button class:active={workspace === 'private'} type="button" on:click={() => (workspace = 'private')}>
-      my notes
-    </button>
-  </nav>
+  <a class="brand" href="#top">todo list</a>
   <div class="header-actions">
     <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
-      {themeMode === 'dark' ? '☾' : themeMode === 'light' ? '☀' : '◐'}
-      <span>{themeMode}</span>
+      {themeMode === 'dark' ? '☾' : themeMode === 'light' ? '☀' : '◐'} <span>{themeMode}</span>
     </button>
     {#if user}
       <button class="bracket-button" type="button" on:click={signOut}>[ sign out ]</button>
     {:else}
-      <button class="bracket-button" type="button" on:click={() => (workspace = 'private')}>[ sign in ]</button>
+      <button class="bracket-button" type="button" on:click={() => requestAuth('signin')}>[ sign in ]</button>
     {/if}
   </div>
 </header>
 
 <main id="top">
   <section class="hero">
-    <p class="eyebrow">LIVE FULL-STACK EXAMPLE</p>
     <h1>This is a Radius artifact with a Neon backend.</h1>
     <p class="hero-copy">
-      Radius serves this Svelte frontend. Neon stores the notes and logos, runs the API, authenticates
-      private workspaces, and answers questions with AI.
+      <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a> serves this
+      frontend. <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a> handles the
+      backend: Neon Functions serve the API endpoints, Lakebase Postgres stores saved todos, Object
+      Storage holds file attachments, Neon Auth protects accounts, and AI Gateway answers questions.
     </p>
-    <div class="architecture" aria-label="Application architecture">
-      <div><span>RADIUS</span><strong>static artifact</strong></div>
-      <b aria-hidden="true">→</b>
-      <div><span>NEON FUNCTION</span><strong>Hono API</strong></div>
-      <b aria-hidden="true">→</b>
-      <div><span>LAKEBASE</span><strong>Postgres</strong></div>
-      <div><span>NEON</span><strong>Object Storage</strong></div>
-      <div><span>NEON</span><strong>Auth + AI Gateway</strong></div>
-    </div>
   </section>
 
-  {#if workspace === 'public'}
-    <section class="workspace-intro">
+  <section class="todo-section" aria-labelledby="todo-title">
+    <div class="todo-heading">
       <div>
-        <p class="eyebrow">PUBLIC, NO SIGN-IN REQUIRED</p>
-        <h2>Explore the web, one fact at a time.</h2>
-        <p>
-          Every card below is a row in Lakebase Postgres. Its logo is an attachment in Neon Object
-          Storage. Ask the agent to connect ideas across the collection.
-        </p>
+        <h2 id="todo-title">A simple todo list</h2>
+        <p>Try everything without an account. Your changes are saved in this browser.</p>
       </div>
-      <div class="service-list" aria-label="Services used by public facts">
-        <span><i></i> Postgres</span><span><i></i> Object Storage</span><span><i></i> AI Gateway</span>
+      <div class="save-status">
+        <span>{user && !cloudDirty ? 'Saved online' : 'Saved on this device'}</span>
+        {#if user}<strong>{user.email}</strong>{/if}
       </div>
-    </section>
-
-    <div class="content-grid">
-      <section class="facts-section" aria-labelledby="facts-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">LAKEBASE POSTGRES + OBJECT STORAGE</p>
-            <h2 id="facts-title">Web dev fun facts</h2>
-          </div>
-          <span class="count">{filteredFacts.length} / {facts.length}</span>
-        </div>
-
-        <div class="filters">
-          <label>
-            <span>SEARCH</span>
-            <input bind:value={search} type="search" placeholder="Try Svelte, Python, hosting..." />
-          </label>
-          <label>
-            <span>CATEGORY</span>
-            <select bind:value={category}>
-              {#each categories as value}
-                <option value={value}>{value}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-
-        {#if factsLoading}
-          <div class="empty-state"><span class="loader"></span> Loading facts from Neon…</div>
-        {:else if factsError}
-          <div class="empty-state error" role="alert">
-            <p>{factsError}</p>
-            <button class="bracket-button" type="button" on:click={loadFacts}>[ retry ]</button>
-          </div>
-        {:else if filteredFacts.length === 0}
-          <div class="empty-state">No facts match those filters.</div>
-        {:else}
-          <div class="fact-list">
-            {#each filteredFacts as fact (fact.id)}
-              <FactCard {fact} />
-            {/each}
-          </div>
-        {/if}
-      </section>
-
-      <aside><ChatPanel mode="public" /></aside>
     </div>
-  {:else}
-    <section class="private-workspace">
-      <div class="workspace-intro">
+
+    <div class="todo-app">
+      <div class="todo-toolbar">
+        <span>{completedCount} of {todos.length} complete</span>
         <div>
-          <p class="eyebrow">OPTIONAL PRIVATE WORKSPACE</p>
-          <h2>Your notes, protected by Neon Auth.</h2>
-          <p>
-            Sign in only if you want to create notes. The Function verifies your Neon Auth token and
-            scopes every database and storage request to your user ID.
-          </p>
+          {#if user}<button type="button" on:click={loadOnline}>load online</button>{/if}
+          <button type="button" on:click={resetTodos}>reset</button>
+          <button class="bracket-button primary" type="button" on:click={saveOnline} disabled={saving}>
+            {saving ? '[ saving… ]' : '[ save online ]'}
+          </button>
         </div>
-        {#if user}
-          <div class="identity"><span>SIGNED IN AS</span><strong>{user.email}</strong></div>
-        {/if}
       </div>
 
-      {#if authLoading}
-        <div class="empty-state"><span class="loader"></span> Checking your session…</div>
-      {:else if !authClient}
-        <div class="empty-state">
-          <h3>Auth is ready for deployment configuration.</h3>
-          <p>Set <code>PUBLIC_NEON_AUTH_URL</code> when building the published artifact.</p>
-        </div>
-      {:else if !user}
-        <section class="auth-panel" aria-labelledby="auth-title">
-          <p class="eyebrow">NEON AUTH</p>
-          <h2 id="auth-title">{authMode === 'signup' ? 'Create a private workspace' : 'Return to your workspace'}</h2>
-          <form on:submit|preventDefault={submitAuth}>
-            <label><span>EMAIL</span><input type="email" bind:value={email} autocomplete="email" required /></label>
-            <label>
-              <span>PASSWORD</span>
-              <input
-                type="password"
-                bind:value={password}
-                autocomplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-                minlength="8"
-                required
-              />
-            </label>
-            <button class="bracket-button primary" type="submit" disabled={authBusy}>
-              {authBusy ? '[ working… ]' : authMode === 'signup' ? '[ create workspace ]' : '[ sign in ]'}
-            </button>
-          </form>
-          {#if authError}<p class="message error" role="alert">{authError}</p>{/if}
-          <button
-            class="text-button"
-            type="button"
-            on:click={() => {
-              authMode = authMode === 'signup' ? 'signin' : 'signup'
-              authError = ''
-            }}
-          >
-            {authMode === 'signup' ? 'Already registered? Sign in.' : 'New here? Create a workspace.'}
-          </button>
-          <p class="privacy-note">Demo only. Do not save sensitive or confidential information.</p>
-        </section>
+      <form class="add-todo" on:submit|preventDefault={addTodo}>
+        <label class="sr-only" for="new-todo">New todo</label>
+        <input id="new-todo" bind:value={newTitle} maxlength="200" placeholder="Add a todo..." />
+        <button class="bracket-button" type="submit" disabled={!newTitle.trim() || todos.length >= MAX_TODOS}>[ add ]</button>
+      </form>
+
+      {#if error}<p class="message error" role="alert">{error}</p>{/if}
+      {#if message}<p class="message" aria-live="polite">{message}</p>{/if}
+
+      {#if loading}
+        <div class="empty-state"><span class="loader"></span> Loading starter todos…</div>
+      {:else if todos.length === 0}
+        <div class="empty-state">Nothing to do. Suspiciously efficient.</div>
       {:else}
-        <div class="personal-grid">
-          <section class="notes-panel" aria-labelledby="my-notes-title">
-            <div class="section-heading">
-              <div><p class="eyebrow">POSTGRES + OBJECT STORAGE</p><h2 id="my-notes-title">My notes</h2></div>
-              <button class="bracket-button" type="button" on:click={resetEditor}>[ new note ]</button>
-            </div>
-
-            <form id="note-editor" class="note-editor" on:submit|preventDefault={saveNote}>
-              <label><span>TITLE</span><input bind:value={noteTitle} maxlength="120" required /></label>
-              <label><span>NOTE</span><textarea bind:value={noteBody} maxlength="5000" rows="5" required></textarea></label>
-              <div class="editor-actions">
-                <button class="bracket-button primary" type="submit" disabled={noteBusy}>
-                  {noteBusy ? '[ saving… ]' : selectedNoteId ? '[ update note ]' : '[ save note ]'}
-                </button>
-                {#if selectedNoteId}
-                  <button class="bracket-button" type="button" on:click={resetEditor}>[ cancel ]</button>
+        <ul class="todo-list">
+          {#each todos as todo (todo.clientId)}
+            {@const sampleAttachment = starterAttachment(todo)}
+            {@const cloudTodo = cloudByClientId.get(todo.clientId)}
+            <li class:completed={todo.completed}>
+              <input
+                class="todo-check"
+                type="checkbox"
+                checked={todo.completed}
+                on:change={() => toggleTodo(todo.clientId)}
+                aria-label={`Mark ${todo.title} ${todo.completed ? 'open' : 'complete'}`}
+              />
+              <div class="todo-content">
+                {#if editingId === todo.clientId}
+                  <form class="edit-todo" on:submit|preventDefault={finishEditing}>
+                    <input bind:value={editTitle} maxlength="200" aria-label="Edit todo" />
+                    <button type="submit">save</button>
+                    <button type="button" on:click={() => (editingId = null)}>cancel</button>
+                  </form>
+                {:else}
+                  <p>{todo.title}</p>
                 {/if}
-              </div>
-            </form>
 
-            {#if noteError}<p class="message error" role="alert">{noteError}</p>{/if}
-            {#if notesLoading}
-              <div class="empty-state"><span class="loader"></span> Loading private notes…</div>
-            {:else if notes.length === 0}
-              <div class="empty-state">Create your first note to test the private Neon backend.</div>
-            {:else}
-              <div class="private-note-list">
-                {#each notes as note (note.id)}
-                  <article class="private-note">
-                    <div class="private-note__heading">
-                      <div><p class="eyebrow">PRIVATE NOTE</p><h3>{note.title}</h3></div>
-                      <div>
-                        <button type="button" on:click={() => editNote(note)}>edit</button>
-                        <button type="button" on:click={() => removeNote(note)}>delete</button>
-                      </div>
-                    </div>
-                    <p>{note.body}</p>
-                    {#if note.attachments.length}
-                      <ul class="attachment-list">
-                        {#each note.attachments as attachment}
-                          <li>
-                            <button type="button" on:click={() => openAttachment(attachment.id)}>↳ {attachment.fileName}</button>
-                            <span>{Math.ceil(attachment.byteSize / 1024)} KB</span>
-                            <button class="danger" type="button" on:click={() => removeAttachment(attachment.id)}>remove</button>
-                          </li>
-                        {/each}
-                      </ul>
-                    {/if}
-                    <label class="file-button">
-                      <span>{fileBusy === note.id ? '[ uploading… ]' : '[ attach file ]'}</span>
-                      <input
-                        type="file"
-                        accept=".png,.jpg,.jpeg,.pdf,.md,.txt,image/png,image/jpeg,application/pdf,text/markdown,text/plain"
-                        disabled={fileBusy === note.id || note.attachments.length >= 3}
-                        on:change={(event) => uploadFile(note, event)}
-                      />
-                    </label>
-                  </article>
-                {/each}
+                <div class="todo-attachments">
+                  {#if sampleAttachment}
+                    <a href={sampleAttachment.url} target="_blank" rel="noreferrer">↳ {sampleAttachment.fileName}</a>
+                  {/if}
+                  {#each cloudTodo?.attachments ?? [] as attachment}
+                    <span>
+                      <button type="button" on:click={() => openAttachment(attachment.id)}>↳ {attachment.fileName}</button>
+                      <button class="remove-attachment" type="button" on:click={() => removeAttachment(attachment.id)}>remove</button>
+                    </span>
+                  {/each}
+                </div>
+
+                <div class="todo-actions">
+                  <button type="button" on:click={() => startEditing(todo)}>edit</button>
+                  <button type="button" on:click={() => beginAttachment(todo)} disabled={fileBusy === todo.clientId}>
+                    {fileBusy === todo.clientId ? 'uploading…' : 'attach file'}
+                  </button>
+                  <button type="button" on:click={() => removeTodo(todo.clientId)}>delete</button>
+                </div>
+                <input
+                  id={`file-${todo.clientId}`}
+                  class="file-input"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.pdf,.md,.txt,image/png,image/jpeg,application/pdf,text/markdown,text/plain"
+                  on:change={(event) => uploadFile(todo, event)}
+                />
               </div>
-            {/if}
-          </section>
-          <aside><ChatPanel mode="private" /></aside>
-        </div>
+            </li>
+          {/each}
+        </ul>
       {/if}
-    </section>
-  {/if}
 
-  <section class="explainer" aria-labelledby="explainer-title">
-    <p class="eyebrow">HOW THIS DEMO WORKS</p>
-    <h2 id="explainer-title">A static frontend. A complete backend.</h2>
-    <div class="explainer-grid">
-      <article><span>01</span><h3>Radius artifact</h3><p>Publishes the compiled Svelte files and gives this frontend a shareable URL.</p></article>
-      <article><span>02</span><h3>Lakebase Postgres</h3><p>Stores public facts and each signed-in user’s private notes as relational data.</p></article>
-      <article><span>03</span><h3>Object Storage</h3><p>Stores logos and user attachments in a private, S3-compatible bucket.</p></article>
-      <article><span>04</span><h3>Neon Function</h3><p>Provides the Hono API, verifies identity, queries Postgres, and signs file URLs.</p></article>
-      <article><span>05</span><h3>Neon Auth</h3><p>Adds optional accounts without blocking visitors from exploring the public demo.</p></article>
-      <article><span>06</span><h3>AI Gateway</h3><p>Lets the agent answer from the notes through one branch-scoped model endpoint.</p></article>
+      {#if todos.length >= MAX_TODOS}<p class="limit-note">This demo allows up to {MAX_TODOS} todos.</p>{/if}
     </div>
+
+    <ChatPanel {todos} />
+    <p class="privacy-note">
+      Todos stay in this browser unless you select “save online.” The current list is sent to Neon only
+      when you ask the AI a question.
+    </p>
   </section>
 </main>
 
+{#if authOpen}
+  <div class="auth-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && (authOpen = false)}>
+    <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button class="auth-close" type="button" on:click={() => (authOpen = false)} aria-label="Close">×</button>
+      <p class="eyebrow">NEON AUTH</p>
+      <h2 id="auth-title">{authMode === 'signup' ? 'Create an account' : 'Sign in'}</h2>
+      <p>{authReason}</p>
+      {#if !authClient}
+        <p class="message error">Authentication is not configured for this environment.</p>
+      {:else}
+        <form on:submit|preventDefault={submitAuth}>
+          <label><span>EMAIL</span><input type="email" bind:value={email} autocomplete="email" required /></label>
+          <label>
+            <span>PASSWORD</span>
+            <input
+              type="password"
+              bind:value={password}
+              autocomplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+              minlength="8"
+              required
+            />
+          </label>
+          <button class="bracket-button primary" type="submit" disabled={authBusy || authLoading}>
+            {authBusy ? '[ working… ]' : authMode === 'signup' ? '[ create account ]' : '[ sign in ]'}
+          </button>
+        </form>
+        {#if authError}<p class="message error" role="alert">{authError}</p>{/if}
+        <button
+          class="text-button"
+          type="button"
+          on:click={() => {
+            authMode = authMode === 'signup' ? 'signin' : 'signup'
+            authError = ''
+          }}
+        >
+          {authMode === 'signup' ? 'Already have an account? Sign in.' : 'Need an account? Create one.'}
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 <footer>
-  <p>Built to show how a Radius artifact can use Neon as its backend.</p>
-  <div><a href="https://pi.dev/" target="_blank" rel="noreferrer">pi.dev</a><a href="https://neon.com/" target="_blank" rel="noreferrer">neon.com</a></div>
+  <p>
+    Built with <a href="https://pi.dev/" target="_blank" rel="noreferrer">Pi</a>,
+    <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a>, and
+    <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a>.
+  </p>
 </footer>

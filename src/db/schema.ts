@@ -1,6 +1,8 @@
 import {
   bigint,
+  boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -8,58 +10,61 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
-export const facts = pgTable(
-  'facts',
+export const starterTodos = pgTable(
+  'starter_todos',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     slug: text('slug').notNull(),
-    name: text('name').notNull(),
-    category: text('category').notNull(),
-    summary: text('summary').notNull(),
-    funFact: text('fun_fact').notNull(),
-    sourceUrl: text('source_url').notNull(),
+    title: text('title').notNull(),
+    completed: boolean('completed').notNull().default(false),
+    position: integer('position').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('facts_slug_idx').on(table.slug), index('facts_category_idx').on(table.category)],
+  (table) => [uniqueIndex('starter_todos_slug_idx').on(table.slug), index('starter_todos_position_idx').on(table.position)],
 )
 
-export const factAssets = pgTable(
-  'fact_assets',
+export const starterAttachments = pgTable(
+  'starter_attachments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    factId: uuid('fact_id')
+    starterTodoId: uuid('starter_todo_id')
       .notNull()
-      .references(() => facts.id, { onDelete: 'cascade' }),
+      .references(() => starterTodos.id, { onDelete: 'cascade' }),
     storageKey: text('storage_key').notNull(),
     fileName: text('file_name').notNull(),
     contentType: text('content_type').notNull(),
     byteSize: bigint('byte_size', { mode: 'number' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('fact_assets_fact_id_idx').on(table.factId)],
+  (table) => [uniqueIndex('starter_attachments_todo_idx').on(table.starterTodoId)],
 )
 
-export const notes = pgTable(
-  'notes',
+export const todos = pgTable(
+  'todos',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: text('user_id').notNull(),
+    clientId: uuid('client_id').notNull(),
     title: text('title').notNull(),
-    body: text('body').notNull(),
+    completed: boolean('completed').notNull().default(false),
+    position: integer('position').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('notes_user_updated_idx').on(table.userId, table.updatedAt)],
+  (table) => [
+    uniqueIndex('todos_user_client_idx').on(table.userId, table.clientId),
+    index('todos_user_position_idx').on(table.userId, table.position),
+  ],
 )
 
 export const attachments = pgTable(
   'attachments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    noteId: uuid('note_id')
+    todoId: uuid('todo_id')
       .notNull()
-      .references(() => notes.id, { onDelete: 'cascade' }),
+      .references(() => todos.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull(),
     storageKey: text('storage_key').notNull(),
     fileName: text('file_name').notNull(),
@@ -69,7 +74,7 @@ export const attachments = pgTable(
   },
   (table) => [
     uniqueIndex('attachments_storage_key_idx').on(table.storageKey),
-    index('attachments_note_idx').on(table.noteId),
+    index('attachments_todo_idx').on(table.todoId),
     index('attachments_user_idx').on(table.userId),
   ],
 )

@@ -1,8 +1,8 @@
 # Radius artifact with a Neon backend
 
-A public, interactive example showing that a multi-file [Radius artifact](https://radius.pi.dev/) can use [Neon](https://neon.com/) as a complete backend.
+A small example showing that a multi-file [Radius artifact](https://radius.earendil.com/) can use [Neon](https://neon.com/) as a complete backend.
 
-The Radius artifact serves a Svelte frontend called **web dev fun facts**. Visitors can browse 53 facts and ask an agent questions without signing in. Neon Auth adds an optional private workspace where people can create notes, attach files, and chat with their own notes.
+The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only when someone saves a list online or uploads a file.
 
 **Live demo:** https://01m2bj2gvpf0t88sf41r93gf76.trove.sh/
 
@@ -10,10 +10,11 @@ The Radius artifact serves a Svelte frontend called **web dev fun facts**. Visit
 
 ```mermaid
 flowchart LR
-  Browser[Radius artifact\nSvelte frontend] --> Function[Neon Function\nHono API]
-  Function --> Postgres[Lakebase Postgres\nfacts and notes]
-  Function --> Storage[Neon Object Storage\nlogos and attachments]
-  Function --> Gateway[Neon AI Gateway\nquestion answering]
+  Browser[Radius artifact\nSvelte frontend] --> Local[Browser localStorage\nguest todos]
+  Browser --> Function[Neon Function\nHono API]
+  Function --> Postgres[Lakebase Postgres\nstarter and saved todos]
+  Function --> Storage[Neon Object Storage\nfile attachments]
+  Function --> Gateway[Neon AI Gateway\ntodo questions]
   Browser --> Auth[Neon Auth\noptional sign-in]
   Auth --> Function
 ```
@@ -21,11 +22,12 @@ flowchart LR
 | Capability | Purpose |
 | --- | --- |
 | Radius artifact | Hosts the compiled HTML, CSS, and JavaScript |
-| Lakebase Postgres | Stores public facts and private notes |
-| Neon Object Storage | Stores fact logos and user attachments |
+| Browser `localStorage` | Saves guest changes on one device |
+| Lakebase Postgres | Stores the starter list and account lists |
+| Neon Object Storage | Stores the example file and account attachments |
 | Neon Function | Provides the API and keeps credentials server-side |
-| Neon Auth | Identifies users of the optional private workspace |
-| Neon AI Gateway | Answers questions using note text as context |
+| Neon Auth | Protects online saving and uploads |
+| Neon AI Gateway | Answers questions about the current list |
 
 The frontend contains only public service URLs. Database, storage, and AI credentials stay inside the Neon Function.
 
@@ -36,7 +38,6 @@ The frontend contains only public service URLs. Database, storage, and AI creden
 - Drizzle ORM and `pg`
 - Neon Functions, Auth, Object Storage, AI Gateway, and Lakebase Postgres
 - Vercel AI SDK with the Neon provider
-- Simple Icons for seeded logo attachments
 
 ## Requirements
 
@@ -53,15 +54,15 @@ Neon Functions, Object Storage, and AI Gateway are beta services. Check the curr
 
 ```text
 functions/api.ts             Hono API deployed as a Neon Function
-src/                         Svelte frontend and shared database schema
-seed/facts.ts                53 sourced web development facts
+src/                         Svelte frontend and database schema
+seed/todos.ts                Four funny starter todos and example file
 scripts/seed.ts              Postgres and Object Storage seed script
 scripts/configure-storage-cors.ts
                              Browser upload CORS setup
 scripts/write-runtime-config.ts
                              Creates public dist/config.json
 neon.ts                      Branch-aware Neon backend definition
-drizzle/                     SQL migrations
+drizzle/                     SQL migration
 public/config.json           Local frontend runtime defaults
 ```
 
@@ -74,14 +75,14 @@ pnpm install
 neon login
 ```
 
-Link a project in a supported region. You can select an existing project or create one:
+Link a project in a supported region, then create an isolated branch:
 
 ```bash
 neon link
 neon checkout dev --create --no-env-pull
 ```
 
-Create a gitignored `.env.local` from `.env.example`. Add a strong Auth cookie secret:
+Create a gitignored `.env.local` and add a strong Auth cookie secret:
 
 ```bash
 cp .env.example .env.local
@@ -94,24 +95,17 @@ Paste the generated value into `.env.local`:
 NEON_AUTH_COOKIE_SECRET=replace-me
 ```
 
-Review and apply the branch configuration:
+Review and apply the backend:
 
 ```bash
 neon config plan --env .env.local
 neon deploy --env .env.local --update-existing
-```
-
-Deployment provisions Neon Auth, the private `attachments` bucket, the `webdevfacts` Function, and AI Gateway access. It also pulls Neon-managed values into `.env.local`.
-
-Run the migration, seed Postgres and Object Storage, then configure storage CORS:
-
-```bash
 pnpm db:migrate
 pnpm db:seed
 pnpm storage:cors
 ```
 
-The seed script is safe to run again. It updates facts by slug and replaces their logo objects.
+Deployment provisions Neon Auth, the private `attachments` bucket, the API Function, and AI Gateway access. It also pulls Neon-managed values into `.env.local`.
 
 ## Configure the frontend
 
@@ -122,7 +116,7 @@ PUBLIC_API_URL=https://your-function-url
 PUBLIC_NEON_AUTH_URL=https://your-neon-auth-url
 ```
 
-Use the values pulled as `NEON_FUNCTION_WEBDEVFACTS_BASE_URL` and `NEON_AUTH_BASE_URL`. They are public endpoints, not credentials.
+Use the Function URL reported by `neon deploy` and the value pulled as `NEON_AUTH_BASE_URL`. They are public endpoints, not credentials.
 
 For local authentication, allow localhost:
 
@@ -130,14 +124,48 @@ For local authentication, allow localhost:
 neon neon-auth domain allow-localhost enable
 ```
 
-Run the Vite frontend and Neon Function locally in separate terminals:
+Run the frontend and Function in separate terminals:
 
 ```bash
 pnpm dev
-pnpm neon:dev
+neon dev --source ./functions/api.ts --port 8787
 ```
 
-You can also use the deployed Function while developing the frontend by setting `PUBLIC_API_URL` to its deployed URL.
+Open http://localhost:5173.
+
+## How the app behaves
+
+### Without an account
+
+- Four starter todos load from Lakebase Postgres.
+- The first starter todo has a Markdown attachment in Object Storage.
+- Changes are stored under `radius-neon-todos:v1` in the browser.
+- Creating, editing, completing, deleting, and resetting todos require no account.
+- The current list is sent to the Function only when the visitor asks an AI question.
+
+### With an account
+
+- Selecting **save online** or **attach file** opens Neon Auth if needed.
+- Saved lists are scoped to the verified Neon Auth user ID.
+- Users can load an online list on another device.
+- Each saved todo supports up to three PNG, JPEG, PDF, Markdown, or text attachments.
+- Each attachment is limited to 5 MB.
+
+The artifact and Neon Auth are on different origins. Browsers that strictly block third-party cookies, especially Safari, may not preserve the optional sign-in session. The public todo experience does not use cookies and still works.
+
+## API
+
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/health` | Public | Backend health |
+| `GET` | `/api/starter-todos` | Public | Starter todos and example attachment |
+| `POST` | `/api/chat` | Public | Ask about the supplied todo list |
+| `GET` | `/api/me/todos` | Authenticated | Load an online list |
+| `PUT` | `/api/me/todos` | Authenticated | Save an online list |
+| `POST` | `/api/me/todos/:id/attachments/presign` | Authenticated | Create an upload URL |
+| `POST` | `/api/me/todos/:id/attachments/complete` | Authenticated | Record a completed upload |
+| `GET` | `/api/me/attachments/:id/url` | Authenticated | Create a download URL |
+| `DELETE` | `/api/me/attachments/:id` | Authenticated | Remove an attachment |
 
 ## Build the Radius artifact
 
@@ -147,74 +175,35 @@ pnpm test
 pnpm build
 ```
 
-The multi-file artifact is produced in `dist/`. Publish the contents of that directory as one Radius artifact. Keep publishing revisions to the same artifact so its canonical URL remains stable.
+Publish the contents of `dist/` as one Radius artifact. Keep publishing revisions to the same artifact so its URL and browser `localStorage` remain stable.
 
 After the first publish:
 
-1. Add the artifact's origin to `APP_ORIGINS` in `.env.local`.
+1. Add the artifact origin to `APP_ORIGINS` in `.env.local`.
 2. Run `neon deploy --env .env.local --update-existing`.
 3. Run `pnpm storage:cors`.
-4. Add the artifact URL to Neon Auth's trusted domains:
+4. Add the artifact URL to Neon Auth trusted domains.
 
 ```bash
 neon neon-auth domain add https://your-radius-artifact-origin
 ```
 
-5. Rebuild and publish a new revision if either public endpoint changed.
-
-## Public and private behavior
-
-### Public workspace
-
-- No account required
-- Facts are read-only
-- Logos use one-hour signed download URLs
-- AI answers only from the seeded fact text
-
-### Private workspace
-
-- Email and password sign-in through Neon Auth
-- Every API request carries a short-lived Neon Auth JWT
-- The Function verifies the JWT and scopes queries by `user_id`
-- Each note supports up to three PNG, JPEG, PDF, Markdown, or text attachments
-- Each attachment is limited to 5 MB
-- The AI reads note titles and text, not attachment contents
-
-The artifact and Neon Auth are on different origins. Browsers that strictly block third-party cookies, especially Safari, may not preserve the optional sign-in session. The public demo does not use cookies and still works. A production deployment should use a shared parent domain or an auth reverse proxy. See Neon's [JWT guidance](https://neon.com/docs/auth/guides/plugins/jwt#retrieve-a-token).
-
-This is a temporary demonstration. Do not store sensitive information in it.
-
-## API
-
-| Method | Path | Access | Purpose |
-| --- | --- | --- | --- |
-| `GET` | `/health` | Public | Backend health |
-| `GET` | `/api/facts` | Public | Facts and signed logo URLs |
-| `POST` | `/api/chat/public` | Public | Ask about seeded facts |
-| `GET/POST` | `/api/me/notes` | Authenticated | List or create notes |
-| `PUT/DELETE` | `/api/me/notes/:id` | Authenticated | Update or delete a note |
-| `POST` | `/api/me/notes/:id/attachments/presign` | Authenticated | Create an upload URL |
-| `POST` | `/api/me/notes/:id/attachments/complete` | Authenticated | Record a completed upload |
-| `GET` | `/api/me/attachments/:id/url` | Authenticated | Create a download URL |
-| `DELETE` | `/api/me/attachments/:id` | Authenticated | Remove an attachment |
-| `POST` | `/api/me/chat` | Authenticated | Ask about private notes |
-
 ## Useful commands
 
 ```bash
 pnpm check          # Type-check Svelte, scripts, and Function code
-pnpm test           # Check seed catalog invariants
+pnpm test           # Run unit tests
 pnpm build          # Build dist/ and write runtime config
 pnpm db:migrate     # Apply SQL migrations
-pnpm db:seed        # Seed facts and logo attachments
+pnpm db:seed        # Seed four todos and one attachment
 pnpm storage:cors   # Apply bucket CORS from APP_ORIGINS
 pnpm neon:deploy    # Deploy neon.ts using .env.local
 ```
 
 ## Design
 
-The interface is inspired by the visual language of [pi.dev](https://pi.dev/): serif copy, monospace controls, thin borders, technical grid paper, square panels, bracket buttons, and dark and light themes. It does not copy the Pi site code or proprietary font files.
+The interface is inspired by [pi.dev](https://pi.dev/): serif copy, monospace controls, thin borders, technical grid paper, square panels, bracket buttons, and dark and light themes. It does not copy the Pi site code or proprietary font files.
 
 ## License
 
-MIT. Simple Icons assets are covered separately in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+MIT.

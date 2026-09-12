@@ -11,7 +11,7 @@ export default defineConfig({
     },
     functions: {
       webdevfacts: {
-        name: 'web dev fun facts API',
+        name: 'simple todos API',
         source: './functions/api.ts',
         env: {
           APP_ORIGINS: process.env.APP_ORIGINS ?? 'http://localhost:5173,http://localhost:4173',

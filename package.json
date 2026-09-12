@@ -37,7 +37,6 @@
     "@types/node": "26.4.1",
     "@types/pg": "8.23.1",
     "dotenv": "17.4.2",
-    "simple-icons": "16.29.0",
     "svelte": "5.57.0",
     "svelte-check": "4.7.6",
     "tsx": "4.23.13",

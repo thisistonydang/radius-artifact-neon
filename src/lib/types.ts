@@ -1,29 +1,40 @@
-export type Fact = {
+export type StarterAttachment = {
+  id: string
+  fileName: string
+  url: string
+}
+
+export type StarterTodo = {
   id: string
   slug: string
-  name: string
-  category: string
-  summary: string
-  funFact: string
-  sourceUrl: string
-  logoUrl: string | null
-  attachmentName: string | null
+  title: string
+  completed: boolean
+  position: number
+  attachment: StarterAttachment | null
+}
+
+export type LocalTodo = {
+  clientId: string
+  starterSlug?: string
+  title: string
+  completed: boolean
 }
 
 export type Attachment = {
   id: string
-  noteId: string
+  todoId: string
   fileName: string
   contentType: string
   byteSize: number
   createdAt: string
 }
 
-export type Note = {
+export type CloudTodo = {
   id: string
+  clientId: string
   title: string
-  body: string
-  createdAt: string
+  completed: boolean
+  position: number
   updatedAt: string
   attachments: Attachment[]
 }
