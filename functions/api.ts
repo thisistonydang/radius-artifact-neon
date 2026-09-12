@@ -155,10 +155,18 @@ async function subjectHash(value: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function consumeRateLimit(bucket: string, subject: string, windowMs: number, limit: number) {
+type RateLimitDatabase = Pick<typeof db, 'insert' | 'delete'>
+
+async function consumeRateLimit(
+  bucket: string,
+  subject: string,
+  windowMs: number,
+  limit: number,
+  database: RateLimitDatabase = db,
+) {
   const now = Date.now()
   const windowStart = new Date(Math.floor(now / windowMs) * windowMs)
-  const [entry] = await db
+  const [entry] = await database
     .insert(apiRateLimits)
     .values({ bucket, subjectHash: await subjectHash(subject), windowStart })
     .onConflictDoUpdate({
@@ -168,7 +176,7 @@ async function consumeRateLimit(bucket: string, subject: string, windowMs: numbe
     .returning({ count: apiRateLimits.count })
 
   if (Math.random() < 0.01) {
-    await db.delete(apiRateLimits).where(lt(apiRateLimits.windowStart, new Date(now - 2 * DAY_MS)))
+    await database.delete(apiRateLimits).where(lt(apiRateLimits.windowStart, new Date(now - 2 * DAY_MS)))
   }
 
   return {
@@ -533,6 +541,7 @@ app.post('/api/me/todos/:id/attachments', async (c) => {
         'all-users',
         DAY_MS,
         UPLOAD_GLOBAL_DAILY_LIMIT,
+        tx,
       )
       if (!globalUploadLimit.allowed) {
         c.header('Retry-After', String(globalUploadLimit.retryAfter))
