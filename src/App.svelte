@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Monitor, Moon, Sun } from '@lucide/svelte'
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
-  import { api } from './lib/api'
+  import { api, ApiError } from './lib/api'
   import { authClient } from './lib/auth'
   import { fromStarters, loadLocalTodos, saveLocalTodos } from './lib/local-todos'
   import { applyTheme, type ThemeMode } from './lib/theme'
@@ -13,6 +13,8 @@
   let todos: LocalTodo[] = []
   let starters: StarterTodo[] = []
   let cloudTodos: CloudTodo[] = []
+  let cloudRevision = 0
+  let cloudSyncReady = false
   let loading = true
   let error = ''
   let message = ''
@@ -21,7 +23,8 @@
   let editTitle = ''
   let cloudDirty = true
   let saving = false
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let savePromise: Promise<boolean> | null = null
+  let changeVersion = 0
   let fileBusy = ''
 
   let themeMode: ThemeMode = 'system'
@@ -32,6 +35,9 @@
   let authError = ''
   let authBusy = false
   let pendingAction: 'signin' | 'save' | 'attach' | null = null
+  let authPanel: HTMLDivElement
+  let emailInput: HTMLInputElement
+  let authTrigger: HTMLElement | null = null
   let email = ''
   let password = ''
   let user: AuthUser | null = null
@@ -39,22 +45,52 @@
   $: cloudByClientId = new Map(cloudTodos.map((todo) => [todo.clientId, todo]))
   $: completedCount = todos.filter((todo) => todo.completed).length
 
-  onMount(async () => {
+  onMount(() => {
     themeMode = (localStorage.getItem('theme') as ThemeMode | null) ?? 'system'
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const followSystemTheme = () => {
+      if (themeMode === 'system') applyTheme('system')
+    }
+    const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
+      if (user && cloudDirty) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
+    }
+    media.addEventListener('change', followSystemTheme)
+    window.addEventListener('beforeunload', warnAboutUnsavedChanges)
+
     const local = loadLocalTodos(localStorage)
     if (local) todos = local
+    void initialize(local)
+
+    return () => {
+      media.removeEventListener('change', followSystemTheme)
+      window.removeEventListener('beforeunload', warnAboutUnsavedChanges)
+    }
+  })
+
+  async function initialize(local: LocalTodo[] | null) {
     await loadStarters(local)
     await refreshSession()
     if (user && (await loadCloudTodos())) applyCloudTodos()
     loading = false
-  })
+  }
+
+  function describeError(caught: unknown, fallback: string) {
+    if (caught instanceof ApiError && caught.status === 401) {
+      user = null
+      cloudSyncReady = false
+    }
+    return caught instanceof Error ? caught.message : fallback
+  }
 
   async function loadStarters(local: LocalTodo[] | null) {
     try {
       starters = (await api.starterTodos()).todos
       if (!local) updateTodos(fromStarters(starters), false)
     } catch (caught) {
-      if (!local) error = caught instanceof Error ? caught.message : 'Could not load the starter list.'
+      if (!local) error = describeError(caught, 'Could not load the starter list.')
     }
   }
 
@@ -62,13 +98,12 @@
     todos = next.slice(0, MAX_TODOS)
     saveLocalTodos(localStorage, todos)
     if (dirty) {
+      changeVersion += 1
       cloudDirty = true
-      if (user) {
-        clearTimeout(saveTimer)
-        saveTimer = setTimeout(() => void saveOnline(), 500)
-      }
+      if (user && cloudSyncReady) void saveOnline()
     }
     message = ''
+    if (!user || cloudSyncReady) error = ''
   }
 
   function addTodo() {
@@ -129,10 +164,16 @@
 
   async function loadCloudTodos() {
     try {
-      cloudTodos = (await api.cloudTodos()).todos
+      const result = await api.cloudTodos()
+      if (result.revision >= cloudRevision) {
+        cloudTodos = result.todos
+        cloudRevision = result.revision
+      }
+      cloudSyncReady = true
+      error = ''
       return true
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'Could not load your saved todos.'
+      error = describeError(caught, 'Could not load your saved todos.')
       return false
     }
   }
@@ -151,6 +192,7 @@
   }
 
   function requestAuth(action: 'signin' | 'save' | 'attach') {
+    authTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
     pendingAction = action
     authReason =
       action === 'attach'
@@ -160,6 +202,36 @@
           : 'Sign in to load or save your todos across devices.'
     authOpen = true
     authError = ''
+    void tick().then(() => emailInput?.focus())
+  }
+
+  function closeAuth() {
+    if (authBusy) return
+    authOpen = false
+    void tick().then(() => authTrigger?.focus())
+  }
+
+  function handleAuthKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeAuth()
+      return
+    }
+    if (event.key !== 'Tab') return
+
+    const focusable = Array.from(
+      authPanel.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'),
+    )
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
   }
 
   async function submitAuth() {
@@ -172,14 +244,20 @@
         ? await authClient.signUp.email({ name: email.split('@')[0] || 'Todo maker', email, password })
         : await authClient.signIn.email({ email, password })
       if (result.error) throw new Error(result.error.message ?? 'Authentication failed.')
+      error = ''
+      cloudTodos = []
+      cloudRevision = 0
+      cloudSyncReady = false
       await refreshSession()
       if (!user) throw new Error('Could not start your account session. Please try again.')
       authOpen = false
       password = ''
+      void tick().then(() => authTrigger?.focus())
 
       if (signingUp) {
-        await saveOnline()
-        if (pendingAction === 'attach') {
+        cloudSyncReady = true
+        const saved = await saveOnline()
+        if (pendingAction === 'attach' && saved) {
           message = 'Your list is saved. Select “attach file” again to choose a file.'
         }
       } else if (await loadCloudTodos()) {
@@ -195,30 +273,74 @@
 
   async function signOut() {
     if (!authClient) return
-    clearTimeout(saveTimer)
-    await authClient.signOut()
+    if (
+      cloudSyncReady &&
+      cloudDirty &&
+      !(await saveOnline()) &&
+      !confirm('Your latest changes could not be saved online. Sign out and reset this device anyway?')
+    ) {
+      return
+    }
+
+    try {
+      await authClient.signOut()
+    } catch (caught) {
+      error = describeError(caught, 'Could not sign out.')
+      return
+    }
+
     user = null
     cloudTodos = []
+    cloudRevision = 0
+    cloudSyncReady = false
     cloudDirty = true
+    error = ''
     if (starters.length) updateTodos(fromStarters(starters), false)
     message = 'Signed out. The starter list has been restored.'
   }
 
-  async function saveOnline() {
+  async function saveOnline(): Promise<boolean> {
     if (!user) {
       requestAuth('save')
-      return
+      return false
     }
+    if (!cloudSyncReady) {
+      error = 'Could not confirm your online list. Reload before saving changes.'
+      return false
+    }
+
+    if (savePromise) {
+      const succeeded = await savePromise
+      if (succeeded && user && cloudDirty) return saveOnline()
+      return succeeded && !cloudDirty
+    }
+
+    const snapshotVersion = changeVersion
+    const snapshotRevision = cloudRevision
+    const snapshot = todos.map((todo) => ({ ...todo }))
     saving = true
     error = ''
-    try {
-      cloudTodos = (await api.saveTodos(todos)).todos
-      cloudDirty = false
-    } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'Could not save your todos online.'
-    } finally {
-      saving = false
-    }
+    const operation = (async () => {
+      try {
+        const result = await api.saveTodos(snapshot, snapshotRevision)
+        cloudTodos = result.todos
+        cloudRevision = result.revision
+        if (snapshotVersion === changeVersion) cloudDirty = false
+        error = ''
+        return true
+      } catch (caught) {
+        error = describeError(caught, 'Could not save your todos online.')
+        return false
+      }
+    })()
+    savePromise = operation
+
+    const succeeded = await operation
+    if (savePromise === operation) savePromise = null
+    saving = false
+
+    if (succeeded && user && cloudDirty) return saveOnline()
+    return succeeded && !cloudDirty
   }
 
   function normalizedFile(file: File) {
@@ -234,8 +356,9 @@
       return
     }
     if (!cloudByClientId.has(todo.clientId) || cloudDirty) {
-      await saveOnline()
-      message = 'Your list is saved. Select “attach file” again to choose a file.'
+      if (await saveOnline()) {
+        message = 'Your list is saved. Select “attach file” again to choose a file.'
+      }
       return
     }
     document.getElementById(`file-${todo.clientId}`)?.click()
@@ -251,33 +374,45 @@
     error = ''
     try {
       await api.uploadAttachment(cloudTodo.id, file)
-      await loadCloudTodos()
-      message = 'Attachment saved in Neon Object Storage.'
+      if (await loadCloudTodos()) message = 'Attachment saved in Neon Object Storage.'
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'Could not upload the attachment.'
+      error = describeError(caught, 'Could not upload the attachment.')
     } finally {
       fileBusy = ''
       input.value = ''
     }
   }
 
-  async function openAttachment(id: string) {
+  async function openSignedUrl(loadUrl: () => Promise<{ url: string }>) {
+    error = ''
+    const tab = window.open('about:blank', '_blank')
+    if (tab) tab.opener = null
     try {
-      const { url } = await api.attachmentUrl(id)
-      window.open(url, '_blank', 'noopener,noreferrer')
+      const { url } = await loadUrl()
+      if (tab) tab.location.replace(url)
+      else window.location.assign(url)
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'Could not open the attachment.'
+      tab?.close()
+      error = describeError(caught, 'Could not open the attachment.')
     }
+  }
+
+  function openStarterAttachment(id: string) {
+    return openSignedUrl(() => api.starterAttachmentUrl(id))
+  }
+
+  function openAttachment(id: string) {
+    return openSignedUrl(() => api.attachmentUrl(id))
   }
 
   async function removeAttachment(id: string) {
     if (!confirm('Delete this attachment?')) return
+    error = ''
     try {
       await api.deleteAttachment(id)
-      await loadCloudTodos()
-      message = 'Attachment deleted.'
+      if (await loadCloudTodos()) message = 'Attachment deleted.'
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : 'Could not delete the attachment.'
+      error = describeError(caught, 'Could not delete the attachment.')
     }
   }
 
@@ -407,7 +542,9 @@
 
                 <div class="todo-attachments">
                   {#if sampleAttachment}
-                    <a href={sampleAttachment.url} target="_blank" rel="noreferrer">↳ {sampleAttachment.fileName}</a>
+                    <button type="button" on:click={() => openStarterAttachment(sampleAttachment.id)}>
+                      ↳ {sampleAttachment.fileName}
+                    </button>
                   {/if}
                   {#each cloudTodo?.attachments ?? [] as attachment}
                     <span>
@@ -445,9 +582,14 @@
 </main>
 
 {#if authOpen}
-  <div class="auth-backdrop" role="presentation" on:click={(event) => event.currentTarget === event.target && (authOpen = false)}>
-    <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <button class="auth-close" type="button" on:click={() => (authOpen = false)} aria-label="Close">×</button>
+  <div
+    class="auth-backdrop"
+    role="presentation"
+    on:click={(event) => event.currentTarget === event.target && closeAuth()}
+    on:keydown={handleAuthKeydown}
+  >
+    <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title" bind:this={authPanel}>
+      <button class="auth-close" type="button" on:click={closeAuth} aria-label="Close">×</button>
       <p class="eyebrow">NEON AUTH</p>
       <h2 id="auth-title">{authMode === 'signup' ? 'Create an account' : 'Sign in'}</h2>
       <p>{authReason}</p>
@@ -455,7 +597,10 @@
         <p class="message error">Authentication is not configured for this environment.</p>
       {:else}
         <form on:submit|preventDefault={submitAuth}>
-          <label><span>EMAIL</span><input type="email" bind:value={email} autocomplete="email" required /></label>
+          <label
+            ><span>EMAIL</span
+            ><input bind:this={emailInput} type="email" bind:value={email} autocomplete="email" required /></label
+          >
           <label>
             <span>PASSWORD</span>
             <input

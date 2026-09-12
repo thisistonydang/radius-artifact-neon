@@ -35,6 +35,7 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
 
 export const api = {
   starterTodos: () => request<{ todos: StarterTodo[] }>('/api/starter-todos'),
+  starterAttachmentUrl: (id: string) => request<{ url: string; expiresIn: number }>(`/api/starter-attachments/${id}/url`),
   chat: (question: string, todos: LocalTodo[]) =>
     request<{ answer: string }>('/api/chat', {
       method: 'POST',
@@ -43,45 +44,33 @@ export const api = {
         todos: todos.map(({ title, completed }) => ({ title, completed })),
       }),
     }),
-  cloudTodos: () => request<{ todos: CloudTodo[] }>('/api/me/todos', {}, true),
-  saveTodos: (todos: LocalTodo[]) =>
-    request<{ todos: CloudTodo[] }>(
+  cloudTodos: () => request<{ todos: CloudTodo[]; revision: number }>('/api/me/todos', {}, true),
+  saveTodos: (todos: LocalTodo[], revision: number) =>
+    request<{ todos: CloudTodo[]; revision: number }>(
       '/api/me/todos',
       {
         method: 'PUT',
-        body: JSON.stringify({ todos: todos.map(({ clientId, title, completed }) => ({ clientId, title, completed })) }),
-      },
-      true,
-    ),
-  async uploadAttachment(todoId: string, file: File) {
-    const upload = await request<{ uploadUrl: string; storageKey: string; fileName: string }>(
-      `/api/me/todos/${todoId}/attachments/presign`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ fileName: file.name, contentType: file.type, byteSize: file.size }),
-      },
-      true,
-    )
-    const uploaded = await fetch(upload.uploadUrl, {
-      method: 'PUT',
-      headers: { 'content-type': file.type },
-      body: file,
-    })
-    if (!uploaded.ok) throw new ApiError('The file upload failed.', uploaded.status)
-    return request(
-      `/api/me/todos/${todoId}/attachments/complete`,
-      {
-        method: 'POST',
+        keepalive: true,
         body: JSON.stringify({
-          storageKey: upload.storageKey,
-          fileName: upload.fileName,
-          contentType: file.type,
-          byteSize: file.size,
+          revision,
+          todos: todos.map(({ clientId, title, completed }) => ({ clientId, title, completed })),
         }),
       },
       true,
-    )
-  },
+    ),
+  uploadAttachment: (todoId: string, file: File) =>
+    request(
+      `/api/me/todos/${todoId}/attachments`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': file.type,
+          'x-file-name': encodeURIComponent(file.name),
+        },
+        body: file,
+      },
+      true,
+    ),
   attachmentUrl: (id: string) => request<{ url: string }>(`/api/me/attachments/${id}/url`, {}, true),
   deleteAttachment: (id: string) =>
     request<{ ok: true }>(`/api/me/attachments/${id}`, { method: 'DELETE' }, true),

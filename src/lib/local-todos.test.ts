@@ -33,4 +33,12 @@ describe('local todo workspace', () => {
     const storage = { getItem: () => '{"version":1,"todos":[{"title":42}]}' }
     expect(loadLocalTodos(storage)).toBeNull()
   })
+
+  it('rejects local todos that cannot be synced', () => {
+    const storage = {
+      getItem: () =>
+        '{"version":1,"todos":[{"clientId":"not-a-uuid","title":"Looks valid","completed":false}]}',
+    }
+    expect(loadLocalTodos(storage)).toBeNull()
+  })
 })

@@ -2,6 +2,7 @@ import type { LocalTodo, StarterTodo } from './types'
 
 export const LOCAL_TODOS_KEY = 'radius-neon-todos:v1'
 const MAX_TODOS = 10
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type StoredWorkspace = {
   version: 1
@@ -14,8 +15,9 @@ function isTodo(value: unknown): value is LocalTodo {
   const todo = value as Record<string, unknown>
   return (
     typeof todo.clientId === 'string' &&
+    UUID_PATTERN.test(todo.clientId) &&
     typeof todo.title === 'string' &&
-    todo.title.length > 0 &&
+    todo.title.trim().length > 0 &&
     todo.title.length <= 200 &&
     typeof todo.completed === 'boolean' &&
     (todo.starterSlug === undefined || typeof todo.starterSlug === 'string')

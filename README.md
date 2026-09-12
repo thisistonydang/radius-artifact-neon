@@ -23,10 +23,10 @@ flowchart LR
 | --- | --- |
 | Radius artifact | Hosts the compiled HTML, CSS, and JavaScript |
 | Browser `localStorage` | Saves guest changes on one device |
-| Lakebase Postgres | Stores the starter list and account lists |
-| Neon Object Storage | Stores the example files and account attachments |
+| Lakebase Postgres | Stores the starter list, account lists, rate limits, and cleanup queue |
+| Neon Object Storage | Stores the four example files and account attachments |
 | Neon Function | Provides the API and keeps credentials server-side |
-| Neon Auth | Protects online saving and uploads |
+| Neon Auth | Protects account syncing and uploads |
 | Neon AI Gateway | Answers questions about the current list |
 
 The frontend contains only public service URLs. Database, storage, and AI credentials stay inside the Neon Function.
@@ -55,45 +55,42 @@ Neon Functions, Object Storage, and AI Gateway are beta services. Check the curr
 ```text
 functions/api.ts             Hono API deployed as a Neon Function
 src/                         Svelte frontend and database schema
-seed/todos.ts                Four funny starter todos and example file
+seed/todos.ts                Four funny starter todos and four example files
 scripts/seed.ts              Postgres and Object Storage seed script
-scripts/configure-storage-cors.ts
-                             Browser upload CORS setup
 scripts/write-runtime-config.ts
                              Creates public dist/config.json
 neon.ts                      Branch-aware Neon backend definition
-drizzle/                     SQL migration
+drizzle/                     SQL migrations
 public/config.json           Local frontend runtime defaults
 ```
 
 ## Set up Neon
 
-Install dependencies and sign in:
+Install dependencies and authenticate:
 
 ```bash
 pnpm install
-neon login
+neon auth
 ```
 
-Link a project in a supported region, then create an isolated branch:
+Link a project in a supported region, create a development branch if needed, then check it out:
 
 ```bash
 neon link
-neon checkout dev --create --no-env-pull
+neon branch create --name dev
+neon checkout dev --no-env-pull
 ```
 
-Create a gitignored `.env.local` and add a strong Auth cookie secret:
+Skip `neon branch create` when `dev` already exists.
+
+Create a gitignored `.env.local`, generate a random salt, and replace the placeholder `RATE_LIMIT_SALT` value:
 
 ```bash
 cp .env.example .env.local
-openssl rand -base64 48
+openssl rand -hex 32
 ```
 
-Paste the generated value into `.env.local`:
-
-```dotenv
-NEON_AUTH_COOKIE_SECRET=replace-me
-```
+Paste the generated value into `RATE_LIMIT_SALT` in `.env.local`.
 
 Review and apply the backend:
 
@@ -102,10 +99,9 @@ neon config plan --env .env.local
 neon deploy --env .env.local --update-existing
 pnpm db:migrate
 pnpm db:seed
-pnpm storage:cors
 ```
 
-Deployment provisions Neon Auth, the private `attachments` bucket, the API Function, and AI Gateway access. It also pulls Neon-managed values into `.env.local`.
+Deployment provisions Neon Auth, the private `attachments` bucket, the `todos` Function, and AI Gateway access. It also pulls Neon-managed values into `.env.local`.
 
 ## Configure the frontend
 
@@ -142,16 +138,17 @@ Open http://localhost:5173.
 - Changes are stored under `radius-neon-todos:v1` in the browser.
 - Creating, editing, completing, deleting, and resetting todos require no account.
 - The current list is sent to the Function only when the visitor asks an AI question.
+- Public AI requests have per-address and global server-side limits.
 
 ### With an account
 
 - Creating an account saves the current browser list to that account.
 - Signing in to an existing account replaces the browser list with the account’s saved list.
-- Signed-in changes save automatically and are scoped to the verified Neon Auth user ID.
-- Signing out restores the four starter todos in `localStorage`.
+- Signed-in changes save immediately through a serialized save queue with server-side revision checks.
+- Signing out waits for pending changes, then restores the four starter todos in `localStorage`.
 - Selecting **attach file** opens Neon Auth if needed.
 - Each saved todo supports up to three PNG, JPEG, PDF, Markdown, or text attachments.
-- Each attachment is limited to 5 MB.
+- Each attachment is limited to 5 MB, and each account is limited to 50 MB.
 
 The artifact and Neon Auth are on different origins. Browsers that strictly block third-party cookies, especially Safari, may not preserve the optional sign-in session. The public todo experience does not use cookies and still works.
 
@@ -160,14 +157,29 @@ The artifact and Neon Auth are on different origins. Browsers that strictly bloc
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Public | Backend health |
-| `GET` | `/api/starter-todos` | Public | Starter todos and example attachments |
-| `POST` | `/api/chat` | Public | Ask about the supplied todo list |
+| `GET` | `/api/starter-todos` | Public | Starter todos and example attachment metadata |
+| `GET` | `/api/starter-attachments/:id/url` | Public | Create an example attachment download URL |
+| `POST` | `/api/chat` | Public, rate limited | Ask about the supplied todo list |
 | `GET` | `/api/me/todos` | Authenticated | Load an online list |
 | `PUT` | `/api/me/todos` | Authenticated | Save an online list |
-| `POST` | `/api/me/todos/:id/attachments/presign` | Authenticated | Create an upload URL |
-| `POST` | `/api/me/todos/:id/attachments/complete` | Authenticated | Record a completed upload |
+| `POST` | `/api/me/todos/:id/attachments` | Authenticated, rate limited | Upload and record an attachment |
 | `GET` | `/api/me/attachments/:id/url` | Authenticated | Create a download URL |
-| `DELETE` | `/api/me/attachments/:id` | Authenticated | Remove an attachment |
+| `DELETE` | `/api/me/attachments/:id` | Authenticated | Queue attachment deletion |
+
+## Production release
+
+Do not point a public artifact at a shared development branch. Use a protected production branch with its own Function, Auth configuration, storage, and database state. Then:
+
+1. Apply migrations and seed data to the production branch.
+2. Deploy `neon.ts` with a production `.env` file and a unique `RATE_LIMIT_SALT`.
+3. Build with the production Function and Auth URLs.
+4. Add the Radius artifact origin to `APP_ORIGINS`.
+5. Add the artifact origin to Neon Auth trusted domains.
+6. Run the full CI checks before publishing.
+
+```bash
+neon neon-auth domain add https://your-radius-artifact-origin
+```
 
 ## Build the Radius artifact
 
@@ -175,20 +187,10 @@ The artifact and Neon Auth are on different origins. Browsers that strictly bloc
 pnpm check
 pnpm test
 pnpm build
+pnpm audit --prod
 ```
 
-Publish the contents of `dist/` as one Radius artifact. Keep publishing revisions to the same artifact so its URL and browser `localStorage` remain stable.
-
-After the first publish:
-
-1. Add the artifact origin to `APP_ORIGINS` in `.env.local`.
-2. Run `neon deploy --env .env.local --update-existing`.
-3. Run `pnpm storage:cors`.
-4. Add the artifact URL to Neon Auth trusted domains.
-
-```bash
-neon neon-auth domain add https://your-radius-artifact-origin
-```
+Publish the contents of `dist/` as one Radius artifact. Keep publishing revisions to the same artifact when you want its URL and browser `localStorage` to remain stable.
 
 ## Useful commands
 
@@ -196,9 +198,8 @@ neon neon-auth domain add https://your-radius-artifact-origin
 pnpm check          # Type-check Svelte, scripts, and Function code
 pnpm test           # Run unit tests
 pnpm build          # Build dist/ and write runtime config
-pnpm db:migrate     # Apply SQL migrations
+pnpm db:migrate     # Apply SQL migrations using the direct database URL
 pnpm db:seed        # Seed four todos and four attachments
-pnpm storage:cors   # Apply bucket CORS from APP_ORIGINS
 pnpm neon:deploy    # Deploy neon.ts using .env.local
 ```
 

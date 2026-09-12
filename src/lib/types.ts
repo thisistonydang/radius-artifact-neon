@@ -1,7 +1,6 @@
 export type StarterAttachment = {
   id: string
   fileName: string
-  url: string
 }
 
 export type StarterTodo = {
