@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Monitor, Moon, Sun } from '@lucide/svelte'
   import { onMount, tick } from 'svelte'
+  import AnimatedLogo from './lib/AnimatedLogo.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import { api, ApiError } from './lib/api'
   import { authClient } from './lib/auth'
@@ -461,6 +462,7 @@
 
 <main id="top">
   <section class="hero">
+    <AnimatedLogo />
     <h1>This is a Radius artifact with a Neon backend.</h1>
     <p class="hero-copy">
       This site has a simple todo app below.
