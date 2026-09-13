@@ -35,7 +35,7 @@ The frontend contains only public service URLs. Database, storage, and AI creden
 
 ## Stack
 
-- Svelte 5 and Vite with a build-time prerendered page shell
+- Svelte and Vite with a build-time prerendered page shell
 - Hono
 - Drizzle ORM and `pg`
 - Neon Functions, Auth, Object Storage, AI Gateway, and Lakebase Postgres
