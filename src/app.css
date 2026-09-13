@@ -264,6 +264,14 @@ footer {
   margin-inline: auto;
 }
 
+.radius-word {
+  color: var(--accent);
+}
+
+.neon-word {
+  color: #37c38f;
+}
+
 .hero-logo-button {
   position: relative;
   display: block;
