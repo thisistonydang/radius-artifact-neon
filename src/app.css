@@ -660,6 +660,18 @@ input:focus {
   display: inline-flex;
 }
 
+.ask-button {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.thinking-spinner {
+  flex: 0 0 auto;
+  animation: spin 800ms linear infinite;
+}
+
 .ask-button-wrap[data-tooltip]:hover::after {
   position: absolute;
   right: 0;

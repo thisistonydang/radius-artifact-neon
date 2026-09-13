@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LoaderCircle } from '@lucide/svelte'
   import { api } from './api'
   import type { LocalTodo } from './types'
 
@@ -52,8 +53,19 @@
         [ clear ]
       </button>
       <span class="ask-button-wrap" data-tooltip={loading ? undefined : askHint}>
-        <button class="bracket-button primary" type="submit" disabled={loading || question.trim().length < 2 || !todos.length}>
-          {loading ? '[ thinking… ]' : '[ ask ]'}
+        <button
+          class="bracket-button primary ask-button"
+          type="submit"
+          disabled={loading || question.trim().length < 2 || !todos.length}
+          aria-label={loading ? 'Thinking' : 'Ask'}
+        >
+          {#if loading}
+            <span>[</span>
+            <LoaderCircle class="thinking-spinner" size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>thinking… ]</span>
+          {:else}
+            <span>[ ask ]</span>
+          {/if}
         </button>
       </span>
     </div>
