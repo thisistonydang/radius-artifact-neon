@@ -428,7 +428,7 @@
 </script>
 
 <svelte:head>
-  <title>A simple todo list · Radius + Neon</title>
+  <title>A full-stack todo list · Radius + Neon</title>
 </svelte:head>
 
 <a class="skip-link" href="#todo-app">Skip to todo list</a>
@@ -477,7 +477,7 @@
     <AnimatedLogo />
     <h1>This is a <span class="radius-word">Radius</span> artifact with a <span class="neon-word">Neon</span> backend.</h1>
     <p class="hero-copy">
-      This site has a simple todo app below.
+      This site has a full-stack todo app below.
       <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a> serves the
       frontend, and <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a> provides its
       backend:
@@ -501,7 +501,7 @@
   <section id="todo-app" class="todo-section" aria-labelledby="todo-title" tabindex="-1">
     <div class="todo-heading">
       <div>
-        <h2 id="todo-title">A simple todo list</h2>
+        <h2 id="todo-title">A full-stack todo list</h2>
         {#if !user}
           <p>
             Changes stay local unless you
