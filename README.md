@@ -4,7 +4,7 @@
 
 A small example showing that a multi-file [Radius artifact](https://radius.earendil.com/) can use [Neon](https://neon.com/) as a complete backend.
 
-The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only to sync a list online or upload a file.
+The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only to sync a list online or upload a file. A replayable animation assembles the Radius and Neon marks above the introduction.
 
 **Live demo:** https://01m2bw7sqme6tr4s569h0wvnsz.trove.sh/
 
@@ -55,16 +55,17 @@ Neon Functions, Object Storage, and AI Gateway are beta services. Check the curr
 ## Project structure
 
 ```text
-functions/api.ts             Hono API deployed as a Neon Function
-src/                         Svelte frontend and database schema
-seed/todos.ts                Four funny starter todos and four example files
-scripts/seed.ts              Postgres and Object Storage seed script
-scripts/prerender.ts         Renders the static page shell and loading skeleton
-scripts/write-runtime-config.ts
-                             Creates public dist/config.json
-neon.ts                      Branch-aware Neon backend definition
-drizzle/                     SQL migrations
-public/config.json           Local frontend runtime defaults
+functions/api.ts                       Hono API deployed as a Neon Function
+src/                                   Svelte frontend and database schema
+src/lib/AnimatedLogo.svelte            Replayable Radius and Neon logo animation
+seed/todos.ts                          Four funny starter todos and four example files
+scripts/seed.ts                        Postgres and Object Storage seed script
+scripts/prerender.ts                   Renders the static page shell and loading skeleton
+scripts/write-runtime-config.ts        Creates public dist/config.json
+neon.ts                                Branch-aware Neon backend definition
+drizzle/                               SQL migrations
+public/config.json                     Local frontend runtime defaults
+public/mixkit-arcade-bonus-229.wav     Logo underline sound effect
 ```
 
 ## Set up Neon
@@ -210,6 +211,12 @@ pnpm neon:deploy    # Deploy neon.ts using .env.local
 ## Design
 
 The interface is inspired by [pi.dev](https://pi.dev/): serif copy, monospace controls, thin borders, technical grid paper, square panels, bracket buttons, and dark and light themes. It does not copy the Pi site code or proprietary font files.
+
+The hero uses the Radius and Neon marks in a Tetris-inspired assembly animation. Selecting **click to replay** runs it again. The cursor and replay control remain inactive until the animation finishes. A sound cue starts with the underline; browsers may block it during the automatic first run, but it works after the visitor selects replay. Reduced-motion mode shows the completed lockup without animation or sound.
+
+## Third-party assets
+
+The Radius and Neon names and marks belong to their respective owners and are not covered by this repository's MIT license. The logo sound is `mixkit-arcade-bonus-229.wav` from [Mixkit](https://mixkit.co/) and is used under the [Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree).
 
 ## Security
 
