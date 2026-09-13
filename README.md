@@ -25,7 +25,7 @@ flowchart LR
 | --- | --- |
 | Radius artifact | Hosts the compiled HTML, CSS, and JavaScript |
 | Browser `localStorage` | Saves guest changes on one device |
-| Lakebase Postgres | Stores the starter list, account lists, rate limits, and cleanup queue |
+| Lakebase Postgres | Stores the todos, rate limits, and cleanup queue |
 | Neon Object Storage | Stores the four example files and account attachments |
 | Neon Function | Provides the API and keeps credentials server-side |
 | Neon Auth | Protects account syncing and uploads |
