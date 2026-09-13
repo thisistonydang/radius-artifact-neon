@@ -6,7 +6,7 @@ A small example showing that a [Radius artifact](https://radius.earendil.com/) c
 
 This app is a full-stack todo list delivered as a Radius artifact and powered by Neon Functions, Lakebase Postgres, Object Storage, Neon Auth, and AI Gateway. Together, these services provide a local-first guest experience, account-based cloud sync, file attachments, and AI questions about the current list. Visitors can add, edit, complete, and delete todos without an account because guest changes stay in localStorage; Neon Auth is needed only for cloud sync and uploads.
 
-**Live demo:** https://01m2bw7sqme6tr4s569h0wvnsz.trove.sh/
+**Radius artifact:** https://radius.earendil.com/artifact/01m2bw7sqme6tr4s569h0wvnsz
 
 ## Architecture
 
