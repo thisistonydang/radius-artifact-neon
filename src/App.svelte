@@ -466,7 +466,7 @@
       This site has a simple todo app below.
       <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a> serves the
       frontend, and <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a> provides its
-      backend.
+      backend:
     </p>
     <ul class="backend-list">
       <li><strong>Neon Functions</strong> serve the API that connects the Radius frontend to the Neon backend.</li>
