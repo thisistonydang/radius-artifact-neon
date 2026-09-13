@@ -693,9 +693,11 @@ input:focus {
   content: attr(data-tooltip);
   font-family: var(--mono);
   font-size: 0.64rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
   line-height: 1.3;
+  overflow-wrap: anywhere;
   pointer-events: none;
-  white-space: nowrap;
 }
 
 .question-row button:disabled {
@@ -1033,6 +1035,11 @@ footer p {
   .question-row .bracket-button,
   .question-row .ask-button-wrap {
     align-self: flex-start;
+  }
+
+  .ask-button-wrap[data-tooltip]:hover::after {
+    right: auto;
+    left: 0;
   }
 }
 

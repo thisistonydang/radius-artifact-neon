@@ -31,7 +31,7 @@
 
 <section class="chat-panel" aria-labelledby="chat-title">
   <h2 id="chat-title">Ask your todos</h2>
-  <p>The current list is sent to Neon AI Gateway when you ask a question.</p>
+  <p>When you ask a question, your current todo list is sent to Neon AI Gateway.</p>
 
   <div class="prompt-list" aria-label="Example questions">
     {#each examples as example}
