@@ -75,7 +75,7 @@
   on:click={replay}
 >
   {#key run}
-    <svg class="hero-logo-lockup" viewBox="105 15 425 175" aria-hidden="true">
+    <svg class="hero-logo-lockup" viewBox="105 15 425 175" visibility="hidden" aria-hidden="true">
       <g class="logo-fragment radius-fragment-1">
         <rect class="radius-mark" x="128" y="80.2" width="25.2" height="75.6" />
       </g>
@@ -196,6 +196,7 @@
     display: block;
     width: 100%;
     height: auto;
+    visibility: visible;
   }
 
   .hero-logo-replay {

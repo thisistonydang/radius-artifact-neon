@@ -161,6 +161,7 @@ h2 {
 }
 
 .header-actions,
+.header-tools,
 .todo-toolbar > div,
 .todo-actions,
 .edit-todo,
@@ -172,6 +173,10 @@ h2 {
 
 .header-actions {
   gap: 1.25rem;
+}
+
+.header-tools {
+  gap: 0.6rem;
 }
 
 .theme-toggle,
@@ -190,14 +195,26 @@ h2 {
   text-underline-offset: 0.2em;
 }
 
+.github-link,
 .theme-toggle {
   display: inline-flex;
   min-height: 40px;
-  gap: 0.4rem;
   align-items: center;
+}
+
+.github-link {
+  width: 32px;
+  justify-content: center;
+  color: var(--muted);
   text-decoration: none;
 }
 
+.theme-toggle {
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+.github-link:hover,
 .theme-toggle:hover,
 .text-button:hover,
 .inline-link:hover,
@@ -278,6 +295,14 @@ footer {
 .backend-list strong {
   color: var(--text);
   font-weight: 600;
+}
+
+.repo-note {
+  max-width: 720px;
+  margin: 1.8rem auto 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-wrap: balance;
 }
 
 .todo-section {
@@ -702,6 +727,8 @@ input:focus {
 footer {
   display: flex;
   min-height: 110px;
+  gap: 0.5rem 1.25rem;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   border-top: 1px solid var(--line);
@@ -713,6 +740,12 @@ footer {
 footer p {
   margin: 0;
   text-align: center;
+}
+
+.footer-github-link {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 @keyframes spin {

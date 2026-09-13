@@ -2,6 +2,7 @@
   import { Monitor, Moon, Sun } from '@lucide/svelte'
   import { onMount, tick } from 'svelte'
   import AnimatedLogo from './lib/AnimatedLogo.svelte'
+  import GitHubIcon from './lib/GitHubIcon.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import { api, ApiError } from './lib/api'
   import { authClient } from './lib/auth'
@@ -434,16 +435,27 @@
 
 <header class="site-header">
   <div class="header-actions">
-    <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
-      {#if themeMode === 'dark'}
-        <Moon size={16} strokeWidth={1.75} />
-      {:else if themeMode === 'light'}
-        <Sun size={16} strokeWidth={1.75} />
-      {:else}
-        <Monitor size={16} strokeWidth={1.75} />
-      {/if}
-      <span>{themeMode}</span>
-    </button>
+    <div class="header-tools">
+      <a
+        class="github-link"
+        href="https://github.com/thisistonydang/radius-artifact-neon"
+        target="_blank"
+        rel="noreferrer"
+        aria-label="View the source code on GitHub"
+      >
+        <GitHubIcon size={20} />
+      </a>
+      <button class="theme-toggle" type="button" on:click={cycleTheme} aria-label={`Theme: ${themeMode}`}>
+        {#if themeMode === 'dark'}
+          <Moon size={16} strokeWidth={1.75} />
+        {:else if themeMode === 'light'}
+          <Sun size={16} strokeWidth={1.75} />
+        {:else}
+          <Monitor size={16} strokeWidth={1.75} />
+        {/if}
+        <span>{themeMode}</span>
+      </button>
+    </div>
     {#if user}
       <button class="bracket-button" type="button" on:click={signOut} disabled={Boolean(fileBusy)}>[ sign out ]</button>
     {:else}
@@ -477,6 +489,13 @@
       <li><strong>Neon Auth</strong> manages optional accounts and protects their data.</li>
       <li><strong>AI Gateway</strong> answers questions about the current todo list.</li>
     </ul>
+    <p class="repo-note">
+      See the
+      <a href="https://github.com/thisistonydang/radius-artifact-neon#readme" target="_blank" rel="noreferrer"
+        >repository README</a
+      >
+      for the full architecture and implementation details.
+    </p>
   </section>
 
   <section id="todo-app" class="todo-section" aria-labelledby="todo-title" tabindex="-1">
@@ -669,4 +688,13 @@
     <a href="https://radius.earendil.com/" target="_blank" rel="noreferrer">Radius</a>, and
     <a href="https://neon.com/" target="_blank" rel="noreferrer">Neon</a>.
   </p>
+  <a
+    class="footer-github-link"
+    href="https://github.com/thisistonydang/radius-artifact-neon"
+    target="_blank"
+    rel="noreferrer"
+  >
+    <GitHubIcon size={14} />
+    <span>GitHub</span>
+  </a>
 </footer>
