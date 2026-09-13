@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thisistonydang/radius-artifact-neon/actions/workflows/ci.yml/badge.svg)](https://github.com/thisistonydang/radius-artifact-neon/actions/workflows/ci.yml)
 
-A small example showing that a multi-file [Radius artifact](https://radius.earendil.com/) can use [Neon](https://neon.com/) as a complete backend.
+A small example showing that a [Radius artifact](https://radius.earendil.com/) can use [Neon](https://neon.com/) as a complete backend.
 
 The public app is a funny todo list. Visitors can add, edit, complete, and delete todos without an account because changes are stored in `localStorage`. Neon Auth is required only to sync a list online or upload a file. A replayable animation assembles the Radius and Neon marks above the introduction.
 
