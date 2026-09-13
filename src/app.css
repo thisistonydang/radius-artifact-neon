@@ -264,6 +264,64 @@ footer {
   margin-inline: auto;
 }
 
+.hero-logo-button {
+  position: relative;
+  display: block;
+  width: min(420px, 100%);
+  margin: 0 auto clamp(2.2rem, 5vw, 3.5rem);
+  padding: 0 0 1.2rem;
+  overflow: hidden;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+}
+
+.hero-logo-button.animating {
+  cursor: default;
+}
+
+.hero-logo-button:not(.animating) {
+  cursor: pointer;
+}
+
+.hero-logo-lockup {
+  display: block;
+  width: 100%;
+  height: auto;
+  visibility: visible;
+}
+
+.hero-logo-replay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: opacity 160ms ease;
+}
+
+.hero-logo-button.animating .hero-logo-replay {
+  opacity: 0;
+}
+
+.radius-mark,
+.plus-block rect {
+  fill: currentColor;
+}
+
+.neon-mark {
+  fill: #37c38f;
+}
+
+.landing-line {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 2;
+}
+
 .hero-copy {
   max-width: 860px;
   margin-right: auto;
@@ -746,6 +804,137 @@ footer p {
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .logo-fragment,
+  .plus-block {
+    will-change: transform;
+    animation: logo-drop 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .radius-fragment-1 {
+    --drop-x: -18px;
+    animation-delay: 100ms;
+  }
+
+  .radius-fragment-2 {
+    --drop-x: 12px;
+    animation-delay: 450ms;
+  }
+
+  .radius-fragment-3 {
+    --drop-x: -9px;
+    animation-delay: 800ms;
+  }
+
+  .radius-fragment-4 {
+    --drop-x: 16px;
+    animation-delay: 1.15s;
+  }
+
+  .plus-block-1 {
+    --drop-x: 7px;
+    animation-delay: 100ms;
+  }
+
+  .plus-block-2 {
+    --drop-x: -10px;
+    animation-delay: 360ms;
+  }
+
+  .plus-block-3 {
+    --drop-x: 5px;
+    animation-delay: 630ms;
+  }
+
+  .plus-block-4 {
+    --drop-x: 12px;
+    animation-delay: 890ms;
+  }
+
+  .plus-block-5 {
+    --drop-x: -6px;
+    animation-delay: 1.15s;
+  }
+
+  .neon-fragment-1 {
+    --drop-x: 18px;
+    animation-delay: 100ms;
+  }
+
+  .neon-fragment-2 {
+    --drop-x: -12px;
+    animation-delay: 310ms;
+  }
+
+  .neon-fragment-3 {
+    --drop-x: 9px;
+    animation-delay: 520ms;
+  }
+
+  .neon-fragment-4 {
+    --drop-x: -16px;
+    animation-delay: 730ms;
+  }
+
+  .neon-fragment-5 {
+    --drop-x: 14px;
+    animation-delay: 940ms;
+  }
+
+  .neon-fragment-6 {
+    --drop-x: -8px;
+    animation-delay: 1.15s;
+  }
+
+  .assembled-exact {
+    opacity: 0;
+    animation: reveal-exact 1ms linear 2.56s forwards;
+  }
+
+  .landing-line {
+    stroke: var(--accent);
+    stroke-dasharray: 540;
+    stroke-dashoffset: 540;
+    animation: line-clear 600ms ease-out 2.7s forwards;
+  }
+}
+
+@keyframes logo-drop {
+  from {
+    opacity: 1;
+    transform: translate3d(var(--drop-x, 0), -190px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes reveal-exact {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes line-clear {
+  0% {
+    stroke-dashoffset: 540;
+    stroke-width: 2;
+  }
+
+  65% {
+    stroke-dashoffset: 0;
+    stroke-width: 5;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+    stroke: var(--line-strong);
+    stroke-width: 2;
+  }
 }
 
 @keyframes spin {
