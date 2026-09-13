@@ -136,7 +136,7 @@ h2 {
 h1 {
   max-width: 920px;
   margin-bottom: 1.4rem;
-  font-size: clamp(2.8rem, 7vw, 6.6rem);
+  font-size: clamp(2.8rem, 7vw, 5.4rem);
   letter-spacing: -0.055em;
 }
 
@@ -240,20 +240,30 @@ footer {
 .hero {
   padding: clamp(5rem, 10vh, 8rem) 0 clamp(4rem, 8vh, 6rem);
   border-bottom: 1px solid var(--line-strong);
+  text-align: center;
+}
+
+.hero h1 {
+  margin-inline: auto;
 }
 
 .hero-copy {
   max-width: 860px;
+  margin-right: auto;
   margin-bottom: 0;
+  margin-left: auto;
   color: var(--copy);
   font-size: clamp(1.05rem, 2vw, 1.3rem);
+  text-wrap: balance;
 }
 
 .backend-list {
   max-width: 860px;
-  margin: 1.8rem 0 0;
+  width: fit-content;
+  margin: 1.8rem auto 0;
   padding-left: 1.25rem;
   color: var(--copy);
+  text-align: left;
 }
 
 .backend-list li {
@@ -693,6 +703,7 @@ footer {
   display: flex;
   min-height: 110px;
   align-items: center;
+  justify-content: center;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-family: var(--mono);
@@ -701,6 +712,7 @@ footer {
 
 footer p {
   margin: 0;
+  text-align: center;
 }
 
 @keyframes spin {

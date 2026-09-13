@@ -1,13 +1,78 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+
+  const ANIMATION_MS = 3_400
   let run = 0
+  let animating = true
+  let animationTimer: ReturnType<typeof setTimeout> | undefined
+  let lineSound: HTMLAudioElement | undefined
+
+  function finish() {
+    clearTimeout(animationTimer)
+    animating = false
+  }
+
+  function scheduleFinish() {
+    clearTimeout(animationTimer)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finish()
+      return
+    }
+    animationTimer = setTimeout(finish, ANIMATION_MS)
+  }
+
+  function playLineSound() {
+    if (!lineSound) return
+    lineSound.currentTime = 0
+    void lineSound.play().catch(() => {
+      // Browsers may block sound before the visitor interacts with the page.
+    })
+  }
+
+  function unlockLineSound() {
+    if (!lineSound) return
+    lineSound.muted = true
+    void lineSound
+      .play()
+      .then(() => {
+        lineSound?.pause()
+        if (lineSound) {
+          lineSound.currentTime = 0
+          lineSound.muted = false
+        }
+      })
+      .catch(() => {
+        if (lineSound) lineSound.muted = false
+      })
+  }
+
+  function replay() {
+    if (animating) return
+    unlockLineSound()
+    animating = true
+    run += 1
+    scheduleFinish()
+  }
+
+  onMount(() => {
+    lineSound = new Audio('./mixkit-arcade-bonus-229.wav')
+    lineSound.preload = 'auto'
+    lineSound.volume = 0.35
+    scheduleFinish()
+    return () => {
+      clearTimeout(animationTimer)
+      lineSound?.pause()
+    }
+  })
 </script>
 
 <button
+  class:animating
   class="hero-logo-button"
   type="button"
   aria-label="Replay the Radius and Neon logo animation"
-  title="Replay logo animation"
-  on:click={() => (run += 1)}
+  aria-disabled={animating}
+  on:click={replay}
 >
   {#key run}
     <svg class="hero-logo-lockup" viewBox="105 15 425 175" aria-hidden="true">
@@ -95,27 +160,58 @@
         d="M27.542.008V28l-10.747-9.508v9.323H0V0zM3.376 24.439H13.42V11.084l10.747 9.508V3.382l-20.79-.005z"
       />
 
-      <path class="landing-line" d="M108 174h420" />
+      <path
+        class="landing-line"
+        d="M108 174h420"
+        on:animationstart={playLineSound}
+        on:animationend={finish}
+      />
     </svg>
   {/key}
+  <span class="hero-logo-replay" aria-hidden="true">click to replay</span>
 </button>
 
 <style>
   .hero-logo-button {
+    position: relative;
     display: block;
     width: min(420px, 100%);
-    margin: 0 0 clamp(2.2rem, 5vw, 3.5rem);
-    padding: 0;
+    margin: 0 auto clamp(2.2rem, 5vw, 3.5rem);
+    padding: 0 0 1.2rem;
     overflow: hidden;
     border: 0;
     color: var(--text);
     background: transparent;
   }
 
+  .hero-logo-button.animating {
+    cursor: default;
+  }
+
+  .hero-logo-button:not(.animating) {
+    cursor: pointer;
+  }
+
   .hero-logo-lockup {
     display: block;
     width: 100%;
     height: auto;
+  }
+
+  .hero-logo-replay {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: opacity 160ms ease;
+  }
+
+  .hero-logo-button.animating .hero-logo-replay {
+    opacity: 0;
   }
 
   .radius-mark,
