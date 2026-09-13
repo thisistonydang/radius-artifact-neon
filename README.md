@@ -65,7 +65,7 @@ scripts/write-runtime-config.ts        Creates public dist/config.json
 neon.ts                                Branch-aware Neon backend definition
 drizzle/                               SQL migrations
 public/config.json                     Local frontend runtime defaults
-public/mixkit-arcade-bonus-229.wav     Logo underline sound effect
+public/mixkit-arcade-bonus-229.mp3     Logo underline sound effect
 ```
 
 ## Set up Neon
@@ -216,7 +216,7 @@ The hero uses the Radius and Neon marks in a Tetris-inspired assembly animation.
 
 ## Third-party assets
 
-The Radius and Neon names and marks belong to their respective owners and are not covered by this repository's MIT license. The logo sound is `mixkit-arcade-bonus-229.wav` from [Mixkit](https://mixkit.co/) and is used under the [Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree).
+The Radius and Neon names and marks belong to their respective owners and are not covered by this repository's MIT license. The logo sound is `mixkit-arcade-bonus-229.mp3` from [Mixkit](https://mixkit.co/) and is used under the [Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree).
 
 ## Security
 

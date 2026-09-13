@@ -55,7 +55,7 @@
   }
 
   onMount(() => {
-    lineSound = new Audio('./mixkit-arcade-bonus-229.wav')
+    lineSound = new Audio('./mixkit-arcade-bonus-229.mp3')
     lineSound.preload = 'auto'
     lineSound.volume = 0.35
     scheduleFinish()
