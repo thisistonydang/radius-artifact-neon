@@ -34,7 +34,7 @@
     "@neondatabase/neon-js": "0.7.0-beta",
     "ai": "7.0.93",
     "drizzle-orm": "0.45.2",
-    "hono": "4.13.7",
+    "hono": "4.13.11",
     "jose": "6.2.12",
     "pg": "8.23.0",
     "zod": "4.5.4"
